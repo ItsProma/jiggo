@@ -1,0 +1,51 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isOwner(userId) {
+      return request.auth != null && request.auth.uid == userId;
+    }
+
+    function activeOwner(userId) {
+      return isOwner(userId)
+        && !exists(/databases/$(database)/documents/account_deletions/$(userId));
+    }
+
+    function validTitle(data) {
+      return data.get('title', null) is string
+        && data.title.size() > 0
+        && data.title.size() <= 150
+        && data.title.matches('.*\\S.*');
+    }
+
+    function validContent(data) {
+      return data.get('content', null) is string
+        && data.content.size() <= 200000;
+    }
+
+    match /users/{userId}/documents/{documentId} {
+      allow read, delete: if activeOwner(userId);
+      allow create: if false;
+      allow update: if activeOwner(userId)
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['title', 'content'])
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['title'])
+          || validTitle(request.resource.data))
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['content'])
+          || validContent(request.resource.data));
+    }
+
+    match /users/{userId}/scanHistory/{scanId} {
+      allow read, delete: if activeOwner(userId);
+      allow create: if false;
+      allow update: if activeOwner(userId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['title'])
+        && validTitle(request.resource.data);
+    }
+
+    // Usage, rate limits, kill switch and deletion markers are server-only.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

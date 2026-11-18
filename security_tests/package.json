@@ -1,0 +1,12 @@
+{
+  "name": "jiggo-security-tests",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "test": "node --test firestore_rules.test.cjs"
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "6.0.0",
+    "firebase": "13.3.0"
+  }
+}

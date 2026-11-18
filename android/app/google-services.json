@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "651664929928",
+    "project_id": "jiggo-bee33",
+    "storage_bucket": "jiggo-bee33.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:651664929928:android:4176d40a5ca692bf361b3d",
+        "android_client_info": {
+          "package_name": "net.debcreatives.jiggo"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "651664929928-v30ustja81ji40rfbppkohrsd6sjnocl.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "net.debcreatives.jiggo",
+            "certificate_hash": "ce4c09039a62d6c4f9ec070518dcea34b5ae31e5"
+          }
+        },
+        {
+          "client_id": "651664929928-34vlp8mvdl8qf2gpuskp40lhh6pqdmco.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC4meizbbWoyz0pxGq4jLHLIjBye6Lortw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "651664929928-34vlp8mvdl8qf2gpuskp40lhh6pqdmco.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
