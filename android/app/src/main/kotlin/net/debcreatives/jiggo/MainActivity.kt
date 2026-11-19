@@ -77,17 +77,18 @@ class MainActivity : FlutterActivity() {
                             }
                         }.start()
                     }
-                } else if (call.method == "openText" || call.method == "openDocx") {
+                } else if (call.method == "openText" || call.method == "openDocx" || call.method == "openPdf") {
                     if (pendingTextOpen != null) {
                         result.error("busy", "A file picker is already open.", null)
                     } else {
                         pendingTextOpen = result
                         val docx = call.method == "openDocx"
-                        pendingOpenLimit = if (docx) 2 * 1024 * 1024 else 128 * 1024
+                        val pdf = call.method == "openPdf"
+                        pendingOpenLimit = if (pdf) 10 * 1024 * 1024 else if (docx) 2 * 1024 * 1024 else 128 * 1024
                         try {
                             startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
                                 addCategory(Intent.CATEGORY_OPENABLE)
-                                type = if (docx) docxMime else "text/plain"
+                                type = if (pdf) "application/pdf" else if (docx) docxMime else "text/plain"
                             }, textOpenRequestCode)
                         } catch (_: Exception) {
                             pendingTextOpen = null
@@ -174,7 +175,7 @@ class MainActivity : FlutterActivity() {
             }
             Thread {
                 try {
-                    var name = if (limit == 2 * 1024 * 1024) "document.docx" else "document.txt"
+                    var name = if (limit == 10 * 1024 * 1024) "document.pdf" else if (limit == 2 * 1024 * 1024) "document.docx" else "document.txt"
                     contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
                         if (cursor.moveToFirst()) name = cursor.getString(0) ?: name
                     }

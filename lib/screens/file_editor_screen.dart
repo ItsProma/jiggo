@@ -1,3 +1,4 @@
+import 'pdf_editor_screen.dart';
 import 'image_editor_screen.dart';
 import 'docx_editor_screen.dart';
 
@@ -207,7 +208,7 @@ class _FileEditorScreenState extends State<FileEditorScreen> {
             const SizedBox(height: 8),
             Text(
               context.tr(
-                'Edit text locally and save a new TXT copy before closing or refreshing. Use Word DOCX or Image Editor for other files. PDF editing is not available here yet.',
+                'Edit text locally and save a new TXT copy before closing or refreshing. Use Word DOCX or Image Editor for other files. Use PDF Editor to arrange PDF pages.',
               ),
             ),
             const SizedBox(height: 12),
@@ -235,6 +236,19 @@ class _FileEditorScreenState extends State<FileEditorScreen> {
                     ),
               icon: const Icon(Icons.image_outlined),
               label: Text(context.tr('Image Editor')),
+            ),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: _busy
+                  ? null
+                  : () => Navigator.push<void>(
+                      context,
+                      MaterialPageRoute<void>(
+                        builder: (_) => const PdfEditorScreen(),
+                      ),
+                    ),
+              icon: const Icon(Icons.picture_as_pdf_outlined),
+              label: Text(context.tr('PDF Editor')),
             ),
             const SizedBox(height: 16),
             Wrap(
