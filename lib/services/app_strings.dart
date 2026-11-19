@@ -26,6 +26,55 @@ class AppStrings {
   }
 
   static const Map<String, String> bangla = {
+    "View all": "সব দেখো",
+    "Save to Library": "লাইব্রেরিতে সেভ করো",
+    "Saved to Library on this device.": "এই ডিভাইসের লাইব্রেরিতে সেভ হয়েছে।",
+    "Local files": "লোকাল ফাইল",
+    "Local files on this device": "এই ডিভাইসের লোকাল ফাইল",
+    "View all local files": "সব লোকাল ফাইল দেখো",
+    "TXT, DOCX, images and PDFs saved from tools":
+        "টুল দিয়ে সেভ করা TXT, DOCX, ছবি ও PDF",
+    "No local files yet. Use Save to Library in an editor or Scan to PDF.":
+        "এখনো লোকাল ফাইল নেই। এডিটর বা Scan to PDF থেকে লাইব্রেরিতে সেভ করো।",
+    "No matching files.": "মিল আছে এমন কোনো ফাইল নেই।",
+    "These files do not sync to other devices. Download a backup before clearing app or browser data.": "এই ফাইল অন্য ডিভাইসে যাবে না। অ্যাপ বা ব্রাউজারের ডেটা মুছার আগে ব্যাকআপ ডাউনলোড করো।",
+    "Stored on this device only. Download a backup before clearing app or browser data.": "শুধু এই ডিভাইসে রাখা আছে। অ্যাপ বা ব্রাউজারের ডেটা মুছার আগে ব্যাকআপ ডাউনলোড করো।",
+    "Local storage is unavailable. Allow site storage or check free space, then retry.": "লোকাল স্টোরেজ ব্যবহার করা যাচ্ছে না। সাইটকে স্টোরেজের অনুমতি দাও বা খালি জায়গা দেখে আবার চেষ্টা করো।",
+    "File options": "ফাইলের অপশন",
+    "Open / download / share": "খোলো / ডাউনলোড / শেয়ার",
+    "Rename file": "ফাইলের নাম বদলাও",
+    "File name": "ফাইলের নাম",
+    "Could not rename this file. Try again.":
+        "ফাইলের নাম বদলানো যায়নি। আবার চেষ্টা করো।",
+    "Delete local file?": "লোকাল ফাইল মুছবে?",
+    "This removes the Library copy on this device. Downloaded files and your original are kept.": "এই ডিভাইসের লাইব্রেরির কপি মুছে যাবে। ডাউনলোড করা ফাইল ও মূল ফাইল থাকবে।",
+    "Could not delete this file. Try again.":
+        "ফাইল মোছা যায়নি। আবার চেষ্টা করো।",
+    "Could not open this local file. Try again or restore a downloaded backup.":
+        "লোকাল ফাইল খোলা যায়নি। আবার চেষ্টা করো অথবা ডাউনলোড করা ব্যাকআপ খোলো।",
+    "File copy saved.": "ফাইলের কপি সেভ হয়েছে।",
+    "Download requested. Check your Downloads folder.":
+        "ডাউনলোডের অনুরোধ করা হয়েছে। Downloads ফোল্ডারে দেখো।",
+    "Share sheet opened. Finish sharing in the selected app.":
+        "শেয়ার করার অপশন খোলা হয়েছে। নির্বাচিত অ্যাপে শেয়ার শেষ করো।",
+    "Cancelled. Your Library copy is kept.": "বাতিল হয়েছে। লাইব্রেরির কপি আছে।",
+    "Unable to download or share. Your Library copy is kept; try again.":
+        "ডাউনলোড বা শেয়ার হয়নি। লাইব্রেরির কপি আছে; আবার চেষ্টা করো।",
+    "Open in editor": "এডিটরে খোলো",
+    "Download copy": "কপি ডাউনলোড করো",
+    "Share file": "ফাইল শেয়ার করো",
+    "PDFs over 10 MB can be viewed and downloaded, but cannot be reopened in this editor.":
+        "১০ MB-এর বড় PDF দেখা ও ডাউনলোড করা যাবে, তবে এই এডিটরে খোলা যাবে না।",
+    "Image preview unavailable. Download a copy to open it.":
+        "ছবির প্রিভিউ দেখা যাচ্ছে না। কপি ডাউনলোড করে খোলো।",
+    "Open in editor to view or edit this DOCX. Save to Library creates a new copy.": "DOCX দেখতে বা বদলাতে এডিটরে খোলো। লাইব্রেরিতে সেভ করলে নতুন কপি তৈরি হবে।",
+    "Local Library is full (100 files or 64 MB). Download a backup, then delete some files and try again.": "লোকাল লাইব্রেরি পূর্ণ (১০০ ফাইল বা ৬৪ MB)। ব্যাকআপ ডাউনলোড করে কিছু ফাইল মুছে আবার চেষ্টা করো।",
+    "Could not save to Library. Your draft is kept. Check free storage and your account, then try again.": "লাইব্রেরিতে সেভ হয়নি। খসড়া আছে। খালি জায়গা ও অ্যাকাউন্ট দেখে আবার চেষ্টা করো।",
+    "Save a new image copy before continuing. Use Save to Library to keep a copy on this device.": "এগোনোর আগে ছবির নতুন কপি সেভ করো। এই ডিভাইসে কপি রাখতে লাইব্রেরিতে সেভ করো।",
+    "Save a new PDF copy before leaving. Use Save to Library to keep a copy on this device.": "বের হওয়ার আগে নতুন PDF কপি সেভ করো। এই ডিভাইসে কপি রাখতে লাইব্রেরিতে সেভ করো।",
+    "Save a DOCX copy before continuing. Use Save to Library to keep a copy on this device.": "এগোনোর আগে DOCX কপি সেভ করো। এই ডিভাইসে কপি রাখতে লাইব্রেরিতে সেভ করো।",
+    "Save a TXT copy or copy your text before continuing. Use Save to Library to keep a copy on this device.": "এগোনোর আগে TXT কপি সেভ করো বা লেখা কপি করো। এই ডিভাইসে কপি রাখতে লাইব্রেরিতে সেভ করো।",
+
     'Resume editing': 'আবার সম্পাদনা করো',
     'Tap Resume editing to place your item.':
         'আইটেম বসাতে আবার সম্পাদনা করো বাটনে চাপ দাও।',

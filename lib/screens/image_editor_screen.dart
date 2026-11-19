@@ -1,3 +1,6 @@
+import '../services/local_file_saver.dart';
+import '../services/local_file_model.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -10,10 +13,15 @@ import '../widgets/scan_crop_editor.dart';
 import '../widgets/image_text_editor.dart';
 
 class ImageEditorScreen extends StatefulWidget {
+  final LocalFileSaver? library;
+  final bool autoOpen;
   final ImageEditFiles? files;
   final ImageEditProcessor processor;
   const ImageEditorScreen({
     super.key,
+    this.library,
+    this.autoOpen = false,
+
     this.files,
     this.processor = const ImageEditProcessor(),
   });
@@ -35,6 +43,16 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
           _title.text != _savedTitle ||
           _format != _savedFormat);
   @override
+  void initState() {
+    super.initState();
+    if (widget.autoOpen) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _open();
+      });
+    }
+  }
+
+  @override
   void dispose() {
     _title.dispose();
     super.dispose();
@@ -48,7 +66,7 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
             title: Text(context.tr('Leave this image?')),
             content: Text(
               context.tr(
-                'Save a new image copy before continuing. This local draft is not saved in Library.',
+                'Save a new image copy before continuing. Use Save to Library to keep a copy on this device.',
               ),
             ),
             actions: [
@@ -278,7 +296,7 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
     });
   }
 
-  Future<void> _export(bool share) async {
+  Future<void> _export(bool share, {bool library = false}) async {
     if (_busy || _history == null) return;
     if (_title.text.trim().isEmpty || _title.text.length > 140) {
       setState(() => _notice = 'Enter an image title of 1–140 characters.');
@@ -287,35 +305,48 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
     final frame = _history!.current, title = _title.text, format = _format;
     setState(() => _busy = true);
     try {
+      final saver = library
+          ? (widget.library ?? AccountLocalFileSaver.capture())
+          : null;
       final bytes = await widget.processor.export(frame, format);
       if (!mounted) return;
       if (bytes.isEmpty || bytes.length > EditedImage.maxEncodedBytes) {
         throw const FormatException('image-output');
       }
       final filename = editedImageFilename(title, format);
-      final result = share
+      final result = library
+          ? await saveLocalCopy(
+              saver!,
+              filename,
+              LocalFileKind.values.byName(format),
+              bytes,
+              'Image Editor',
+            )
+          : share
           ? await _files.share(bytes, filename)
           : await _files.save(bytes, filename);
       if (!mounted) return;
       setState(() {
-        _notice = switch (result) {
-          PdfDelivery.saved => 'Image copy saved.',
-          PdfDelivery.downloadRequested =>
-            'Image download requested. Check Downloads before leaving.',
-          PdfDelivery.shareOpened => 'Image sharing opened.',
-          PdfDelivery.cancelled =>
-            'Sharing or saving did not finish. Your image is kept.',
-        };
+        _notice = library
+            ? 'Saved to Library on this device.'
+            : switch (result) {
+                PdfDelivery.saved => 'Image copy saved.',
+                PdfDelivery.downloadRequested =>
+                  'Image download requested. Check Downloads before leaving.',
+                PdfDelivery.shareOpened => 'Image sharing opened.',
+                PdfDelivery.cancelled =>
+                  'Sharing or saving did not finish. Your image is kept.',
+              };
         if (result == PdfDelivery.saved) {
           _savedImage = frame;
           _savedTitle = title;
           _savedFormat = format;
         }
       });
-    } catch (_) {
+    } catch (error) {
       if (mounted) {
         setState(
-          () => _notice = 'Unable to save or share this image. Your edits are kept; try again.',
+          () => _notice = library ? localSaveFailure(error) : 'Unable to save or share this image. Your edits are kept; try again.',
         );
       }
     } finally {
@@ -485,6 +516,14 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
                   spacing: 8,
                   runSpacing: 8,
                   children: [
+                    OutlinedButton.icon(
+                      key: const ValueKey('local-library-save'),
+                      onPressed: _busy || _history == null
+                          ? null
+                          : () => _export(false, library: true),
+                      icon: const Icon(Icons.library_add_outlined),
+                      label: Text(context.tr('Save to Library')),
+                    ),
                     FilledButton(
                       onPressed: _busy ? null : () => _export(false),
                       child: Text(context.tr('Save image copy')),

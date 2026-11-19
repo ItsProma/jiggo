@@ -1,3 +1,4 @@
+import '../widgets/local_files_panel.dart';
 import '../services/app_theme.dart';
 import '../services/app_strings.dart';
 
@@ -20,7 +21,13 @@ class _LibraryScreenState extends State<LibraryScreen> {
   int _selectedFilter = 0;
   String _searchQuery = '';
   LibrarySort _sort = LibrarySort.newest;
-  static const _filters = ['All', 'Documents', 'Scans', 'AI Chats'];
+  static const _filters = [
+    'All',
+    'Documents',
+    'Scans',
+    'AI Chats',
+    'Local files',
+  ];
 
   @override
   void initState() {
@@ -165,12 +172,41 @@ class _LibraryScreenState extends State<LibraryScreen> {
                       ),
                     );
                   }
-                  return AllLibraryItems(
+                  if (_selectedFilter == 4) {
+                    return LocalFilesPanel(
+                      key: ValueKey('local-${user.uid}'),
+                      userId: user.uid,
+                      search: _searchQuery,
+                      sort: _sort,
+                      currentOwner: () =>
+                          FirebaseAuth.instance.currentUser?.uid,
+                    );
+                  }
+                  final cloud = AllLibraryItems(
                     key: ValueKey(user.uid),
                     userId: user.uid,
                     searchQuery: _searchQuery,
                     filter: _selectedFilter,
                     sort: _sort,
+                  );
+                  if (_selectedFilter != 0) return cloud;
+                  return Column(
+                    children: [
+                      Card(
+                        child: ListTile(
+                          leading: const Icon(Icons.folder_copy_outlined),
+                          title: Text(context.tr('Local files on this device')),
+                          subtitle: Text(
+                            context.tr(
+                              'TXT, DOCX, images and PDFs saved from tools',
+                            ),
+                          ),
+                          trailing: const Icon(Icons.chevron_right),
+                          onTap: () => setState(() => _selectedFilter = 4),
+                        ),
+                      ),
+                      Expanded(child: cloud),
+                    ],
                   );
                 },
               ),

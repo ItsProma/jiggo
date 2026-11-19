@@ -1,3 +1,7 @@
+import 'dart:convert';
+
+import '../services/local_file_saver.dart';
+import '../services/local_file_model.dart';
 import 'pdf_editor_screen.dart';
 import 'image_editor_screen.dart';
 import 'docx_editor_screen.dart';
@@ -10,9 +14,17 @@ import '../services/text_document_picker.dart';
 import '../services/text_file_actions.dart';
 
 class FileEditorScreen extends StatefulWidget {
+  final LocalFileSaver? library;
+  final bool autoOpen;
   final TextDocumentPicker? picker;
   final TextFileActions? files;
-  const FileEditorScreen({super.key, this.picker, this.files});
+  const FileEditorScreen({
+    super.key,
+    this.picker,
+    this.files,
+    this.library,
+    this.autoOpen = false,
+  });
   @override
   State<FileEditorScreen> createState() => _FileEditorScreenState();
 }
@@ -30,6 +42,16 @@ class _FileEditorScreenState extends State<FileEditorScreen> {
   String? _notice;
   bool get _changed => _text.text != _baseline || _title.text != _baseTitle;
   @override
+  void initState() {
+    super.initState();
+    if (widget.autoOpen) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _open();
+      });
+    }
+  }
+
+  @override
   void dispose() {
     _text.dispose();
     _title.dispose();
@@ -46,7 +68,7 @@ class _FileEditorScreenState extends State<FileEditorScreen> {
             title: Text(context.tr('Leave this text?')),
             content: Text(
               context.tr(
-                'Save a TXT copy or copy your text before continuing. This draft is not saved in Library.',
+                'Save a TXT copy or copy your text before continuing. Use Save to Library to keep a copy on this device.',
               ),
             ),
             actions: [
@@ -127,7 +149,7 @@ class _FileEditorScreenState extends State<FileEditorScreen> {
     }
   }
 
-  Future<void> _export(bool share) async {
+  Future<void> _export(bool share, {bool library = false}) async {
     if (_busy) return;
     if (_text.text.trim().isEmpty ||
         _text.text.length > TextDocument.maxCharacters ||
@@ -141,8 +163,19 @@ class _FileEditorScreenState extends State<FileEditorScreen> {
     }
     setState(() => _busy = true);
     try {
+      final saver = library
+          ? (widget.library ?? AccountLocalFileSaver.capture())
+          : null;
       final title = _title.text.trim();
-      final result = share
+      final result = library
+          ? await saveLocalCopy(
+              saver!,
+              handwritingFilename('${title}_edited'),
+              LocalFileKind.txt,
+              Uint8List.fromList(utf8.encode(_text.text)),
+              'Text Editor',
+            )
+          : share
           ? await _files.share(_text.text, title)
           : await _files.save(
               _text.text,
@@ -150,25 +183,29 @@ class _FileEditorScreenState extends State<FileEditorScreen> {
             );
       if (!mounted) return;
       setState(
-        () => _notice = switch (result) {
-          PdfDelivery.saved =>
-            'TXT copy saved. Your original file is unchanged.',
-          PdfDelivery.downloadRequested =>
-            'TXT download requested. Check Downloads before leaving.',
-          PdfDelivery.shareOpened => 'Text sharing opened.',
-          PdfDelivery.cancelled =>
-            'Sharing or saving did not finish. Your text is kept.',
-        },
+        () => _notice = library
+            ? 'Saved to Library on this device.'
+            : switch (result) {
+                PdfDelivery.saved =>
+                  'TXT copy saved. Your original file is unchanged.',
+                PdfDelivery.downloadRequested =>
+                  'TXT download requested. Check Downloads before leaving.',
+                PdfDelivery.shareOpened => 'Text sharing opened.',
+                PdfDelivery.cancelled =>
+                  'Sharing or saving did not finish. Your text is kept.',
+              },
       );
       // Sharing or requesting a download does not prove a file was saved.
       if (result == PdfDelivery.saved) {
         _baseline = _text.text;
         _baseTitle = _title.text;
       }
-    } catch (_) {
+    } catch (error) {
       if (mounted) {
         setState(
-          () => _notice = 'Unable to export text. Copy it or try again.',
+          () => _notice = library
+              ? localSaveFailure(error)
+              : 'Unable to export text. Copy it or try again.',
         );
       }
     } finally {
@@ -335,6 +372,12 @@ class _FileEditorScreenState extends State<FileEditorScreen> {
               spacing: 8,
               runSpacing: 8,
               children: [
+                OutlinedButton.icon(
+                  key: const ValueKey('local-library-save'),
+                  onPressed: _busy ? null : () => _export(false, library: true),
+                  icon: const Icon(Icons.library_add_outlined),
+                  label: Text(context.tr('Save to Library')),
+                ),
                 FilledButton(
                   onPressed: _busy ? null : () => _export(false),
                   child: Text(context.tr('Save TXT copy')),

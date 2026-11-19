@@ -1,3 +1,6 @@
+import '../services/local_file_saver.dart';
+import '../services/local_file_model.dart';
+
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -10,10 +13,15 @@ import '../services/docx_files.dart';
 import '../services/docx_processor.dart';
 
 class DocxEditorScreen extends StatefulWidget {
+  final LocalFileSaver? library;
+  final bool autoOpen;
   final DocxFiles? files;
   final DocxProcessor processor;
   const DocxEditorScreen({
     super.key,
+    this.library,
+    this.autoOpen = false,
+
     this.files,
     this.processor = const DocxProcessor(),
   });
@@ -67,6 +75,11 @@ class _DocxEditorScreenState extends State<DocxEditorScreen> {
       {'insert': '\n'},
     ]);
     _saved = jsonEncode(_controller.document.toDelta().toJson());
+    if (widget.autoOpen) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _open();
+      });
+    }
   }
 
   void _change() {
@@ -89,7 +102,7 @@ class _DocxEditorScreenState extends State<DocxEditorScreen> {
             title: Text(context.tr('Leave this document?')),
             content: Text(
               context.tr(
-                'Save a DOCX copy before continuing. This local draft is not saved in Library.',
+                'Save a DOCX copy before continuing. Use Save to Library to keep a copy on this device.',
               ),
             ),
             actions: [
@@ -163,7 +176,7 @@ class _DocxEditorScreenState extends State<DocxEditorScreen> {
     }
   }
 
-  Future<void> _export(bool share) async {
+  Future<void> _export(bool share, {bool library = false}) async {
     if (_busy) return;
     if (_title.text.trim().isEmpty ||
         _title.text.length > 140 ||
@@ -183,30 +196,43 @@ class _DocxEditorScreenState extends State<DocxEditorScreen> {
       _controller.readOnly = true;
     });
     try {
+      final saver = library
+          ? (widget.library ?? AccountLocalFileSaver.capture())
+          : null;
       final bytes = await widget.processor.encode(delta);
       if (!mounted) return;
-      final result = share
+      final result = library
+          ? await saveLocalCopy(
+              saver!,
+              docxFilename(title),
+              LocalFileKind.docx,
+              bytes,
+              'Word DOCX',
+            )
+          : share
           ? await _files.share(bytes, docxFilename(title))
           : await _files.save(bytes, docxFilename(title));
       if (!mounted) return;
       setState(() {
-        _notice = switch (result) {
-          PdfDelivery.saved => 'DOCX copy saved.',
-          PdfDelivery.downloadRequested =>
-            'DOCX download requested. Check Downloads before leaving.',
-          PdfDelivery.shareOpened => 'DOCX sharing opened.',
-          PdfDelivery.cancelled =>
-            'Sharing or saving did not finish. Your document is kept.',
-        };
+        _notice = library
+            ? 'Saved to Library on this device.'
+            : switch (result) {
+                PdfDelivery.saved => 'DOCX copy saved.',
+                PdfDelivery.downloadRequested =>
+                  'DOCX download requested. Check Downloads before leaving.',
+                PdfDelivery.shareOpened => 'DOCX sharing opened.',
+                PdfDelivery.cancelled =>
+                  'Sharing or saving did not finish. Your document is kept.',
+              };
         if (result == PdfDelivery.saved) {
           _saved = jsonEncode(delta);
           _savedTitle = title;
         }
       });
-    } catch (_) {
+    } catch (error) {
       if (mounted) {
         setState(
-          () => _notice = 'Unable to export DOCX. Use only Bold, Italic, Heading and single-level lists. Your document is kept; copy the text if needed.',
+          () => _notice = library ? localSaveFailure(error) : 'Unable to export DOCX. Use only Bold, Italic, Heading and single-level lists. Your document is kept; copy the text if needed.',
         );
       }
     } finally {
@@ -416,6 +442,14 @@ class _DocxEditorScreenState extends State<DocxEditorScreen> {
                 spacing: 8,
                 runSpacing: 8,
                 children: [
+                  OutlinedButton.icon(
+                    key: const ValueKey('local-library-save'),
+                    onPressed: _busy
+                        ? null
+                        : () => _export(false, library: true),
+                    icon: const Icon(Icons.library_add_outlined),
+                    label: Text(context.tr('Save to Library')),
+                  ),
                   FilledButton(
                     onPressed: _busy ? null : () => _export(false),
                     child: Text(context.tr('Save DOCX copy')),

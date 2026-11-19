@@ -1,3 +1,6 @@
+import '../services/local_file_saver.dart';
+import '../services/local_file_model.dart';
+
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -12,12 +15,15 @@ import '../services/scan_photo_source.dart';
 import '../widgets/scan_crop_editor.dart';
 
 class ScanPdfScreen extends StatefulWidget {
+  final LocalFileSaver? library;
   final ScanPhotoSource? photos;
   final PdfScanImages? images;
   final ScanPdfBuilder? builder;
   final PdfFileActions? files;
   const ScanPdfScreen({
     super.key,
+    this.library,
+
     this.photos,
     this.images,
     this.builder,
@@ -234,11 +240,22 @@ class _ScanPdfScreenState extends State<ScanPdfScreen> {
     }
   }
 
-  Future<void> _deliver(bool share) async {
+  Future<void> _deliver(bool share, {bool library = false}) async {
     if (_busy || _pdf == null || _filename == null) return;
     setState(() => _busy = true);
     try {
-      final result = share
+      final saver = library
+          ? (widget.library ?? AccountLocalFileSaver.capture())
+          : null;
+      final result = library
+          ? await saveLocalCopy(
+              saver!,
+              _filename!,
+              LocalFileKind.pdf,
+              _pdf!,
+              'Scan to PDF',
+            )
+          : share
           ? await _files.share(_pdf!, _filename!)
           : await _files.save(_pdf!, _filename!);
       if (!mounted) return;
@@ -247,21 +264,24 @@ class _ScanPdfScreenState extends State<ScanPdfScreen> {
             result == PdfDelivery.downloadRequested) {
           _exported = true;
         }
-        _feedback(switch (result) {
-          PdfDelivery.saved => 'PDF saved successfully.',
-          PdfDelivery.downloadRequested =>
-            'PDF download requested. Check your Downloads folder.',
-          PdfDelivery.shareOpened =>
-            'Share sheet opened. Save a copy if you want to keep this PDF.',
-          PdfDelivery.cancelled =>
-            'Save or sharing was cancelled. Your PDF is still ready.',
-        });
+        _feedback(
+          library
+              ? 'Saved to Library on this device.'
+              : switch (result) {
+                  PdfDelivery.saved => 'PDF saved successfully.',
+                  PdfDelivery.downloadRequested =>
+                    'PDF download requested. Check your Downloads folder.',
+                  PdfDelivery.shareOpened => 'Share sheet opened. Save a copy if you want to keep this PDF.',
+                  PdfDelivery.cancelled =>
+                    'Save or sharing was cancelled. Your PDF is still ready.',
+                },
+        );
       });
-    } catch (_) {
+    } catch (error) {
       if (mounted) {
         setState(
           () => _feedback(
-            'Unable to save or share. Your PDF is still ready; try again.',
+            library ? localSaveFailure(error) : 'Unable to save or share. Your PDF is still ready; try again.',
           ),
         );
       }
@@ -541,6 +561,14 @@ class _ScanPdfScreenState extends State<ScanPdfScreen> {
               runSpacing: 8,
               alignment: WrapAlignment.center,
               children: [
+                OutlinedButton.icon(
+                  key: const ValueKey('local-library-save'),
+                  onPressed: _busy || _pdf == null
+                      ? null
+                      : () => _deliver(false, library: true),
+                  icon: const Icon(Icons.library_add_outlined),
+                  label: Text(context.tr('Save to Library')),
+                ),
                 FilledButton.icon(
                   key: const ValueKey('scan-pdf-create'),
                   onPressed: _busy || _pages.isEmpty ? null : _create,

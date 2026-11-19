@@ -11,6 +11,7 @@ class HomeOverview extends StatelessWidget {
   final ValueChanged<String> onUnavailable;
   final VoidCallback onOpenLibrary;
   final ValueChanged<String>? onSubmit;
+  final Widget? recentFiles;
   const HomeOverview({
     super.key,
     required this.promptController,
@@ -18,6 +19,7 @@ class HomeOverview extends StatelessWidget {
     required this.onUnavailable,
     required this.onOpenLibrary,
     this.onSubmit,
+    this.recentFiles,
   });
 
   @override
@@ -99,21 +101,37 @@ class HomeOverview extends StatelessWidget {
         HomeTools(onSelected: onToolSelected),
 
         const SizedBox(height: 20),
-        Text(
-          context.tr('Recent Activity'),
-          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                context.tr('Recent Activity'),
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+            if (recentFiles != null)
+              TextButton(
+                onPressed: onOpenLibrary,
+                child: Text(context.tr('View all')),
+              ),
+          ],
         ),
-        const SizedBox(height: 12),
-        Card(
-          color: context.cardColor,
-          child: ListTile(
-            leading: const Icon(Icons.folder_outlined),
-            title: Text(context.tr('My Documents')),
-            subtitle: Text(context.tr('Open your saved documents and scans')),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: onOpenLibrary,
+        const SizedBox(height: 4),
+        ?recentFiles,
+        if (recentFiles == null)
+          Card(
+            color: context.cardColor,
+            child: ListTile(
+              leading: const Icon(Icons.folder_outlined),
+              title: Text(context.tr('My Documents')),
+              subtitle: Text(context.tr('Open your saved documents and scans')),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: onOpenLibrary,
+            ),
           ),
-        ),
       ],
     ),
   );

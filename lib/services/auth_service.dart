@@ -1,3 +1,5 @@
+import 'local_file_store.dart';
+
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
@@ -156,6 +158,10 @@ class AuthService {
           'deleteMyAccount',
           options: HttpsCallableOptions(timeout: const Duration(seconds: 560)),
         );
+    await deviceLocalFiles.clear(uid);
+    if (_auth.currentUser?.uid != uid) {
+      throw FirebaseAuthException(code: 'user-mismatch');
+    }
     final result = await callable.call<Map<String, dynamic>>({
       'confirm': true,
       'expectedUid': uid,

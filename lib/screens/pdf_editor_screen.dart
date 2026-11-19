@@ -1,3 +1,5 @@
+import '../services/local_file_saver.dart';
+import '../services/local_file_model.dart';
 import 'pdf_markup_screen.dart';
 import '../services/pdf_markup_engine.dart';
 import '../services/image_edit_model.dart';
@@ -13,12 +15,17 @@ import '../services/pdf_edit_picker.dart';
 import '../services/pdf_file_actions.dart';
 
 class PdfEditorScreen extends StatefulWidget {
+  final LocalFileSaver? library;
+  final bool autoOpen;
   final PdfEditPicker? picker;
   final PdfEditEngine? engine;
   final PdfFileActions? files;
   final PdfMarkupEngine? markup;
   const PdfEditorScreen({
     super.key,
+    this.library,
+    this.autoOpen = false,
+
     this.picker,
     this.engine,
     this.files,
@@ -44,6 +51,16 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
   bool get _dirty =>
       _hasPdf && (_plan.signature != _baseline || _title.text != _baseTitle);
   @override
+  void initState() {
+    super.initState();
+    if (widget.autoOpen) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _open();
+      });
+    }
+  }
+
+  @override
   void dispose() {
     _title.dispose();
     for (final source in _sources) {
@@ -62,7 +79,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
               title: Text(c.tr('Leave this PDF?')),
               content: Text(
                 c.tr(
-                  'Save a new PDF copy before leaving. This draft is not saved in Library.',
+                  'Save a new PDF copy before leaving. Use Save to Library to keep a copy on this device.',
                 ),
               ),
               actions: [
@@ -167,15 +184,26 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
     }
   }
 
-  Future<void> _export(bool share) async {
+  Future<void> _export(bool share, {bool library = false}) async {
     if (_busy || !_hasPdf) return;
     setState(() => _busy = true);
     try {
+      final saver = library
+          ? (widget.library ?? AccountLocalFileSaver.capture())
+          : null;
       final bytes = await _engine.export(_sources, _plan.pages);
       if (!mounted) return;
       if (bytes.length > 32 * 1024 * 1024) throw const FormatException();
       final filename = editedPdfName(_title.text);
-      final result = share
+      final result = library
+          ? await saveLocalCopy(
+              saver!,
+              filename,
+              LocalFileKind.pdf,
+              bytes,
+              'PDF Editor',
+            )
+          : share
           ? await _files.share(bytes, filename)
           : await _files.save(bytes, filename);
       if (!mounted) return;
@@ -183,7 +211,9 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
         if (result == PdfDelivery.saved) {
           _baseline = _plan.signature;
           _baseTitle = _title.text;
-          _notice = 'PDF copy saved.';
+          _notice = library
+              ? 'Saved to Library on this device.'
+              : 'PDF copy saved.';
         } else if (result == PdfDelivery.downloadRequested) {
           _notice = 'PDF download requested. Check Downloads before leaving.';
         } else if (result == PdfDelivery.shareOpened) {
@@ -192,11 +222,12 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
           _notice = 'Cancelled. Your PDF draft is kept.';
         }
       });
-    } catch (_) {
+    } catch (error) {
       if (mounted) {
         setState(
-          () => _notice =
-              'Could not export PDF. Your draft is kept. Try a smaller PDF.',
+          () => _notice = library
+              ? localSaveFailure(error)
+              : 'Could not export PDF. Your draft is kept. Try a smaller PDF.',
         );
       }
     } finally {
@@ -470,6 +501,14 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
                       spacing: 8,
                       runSpacing: 8,
                       children: [
+                        OutlinedButton.icon(
+                          key: const ValueKey('local-library-save'),
+                          onPressed: _busy || !_hasPdf
+                              ? null
+                              : () => _export(false, library: true),
+                          icon: const Icon(Icons.library_add_outlined),
+                          label: Text(context.tr('Save to Library')),
+                        ),
                         FilledButton.icon(
                           onPressed: _busy ? null : () => _export(false),
                           icon: const Icon(Icons.save_alt),

@@ -1,3 +1,4 @@
+import 'widgets/local_files_panel.dart';
 import 'screens/file_editor_screen.dart';
 
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -449,6 +450,16 @@ class _JiggoHomePageState extends State<JiggoHomePage> {
         index: selectedIndex,
         children: [
           HomeOverview(
+            recentFiles: FirebaseAuth.instance.currentUser == null
+                ? null
+                : LocalFilesPanel(
+                    key: ValueKey(
+                      'recent-${FirebaseAuth.instance.currentUser!.uid}',
+                    ),
+                    userId: FirebaseAuth.instance.currentUser!.uid,
+                    compact: true,
+                    currentOwner: () => FirebaseAuth.instance.currentUser?.uid,
+                  ),
             promptController: promptController,
             onToolSelected: _openTool,
             onSubmit: _openChat,
