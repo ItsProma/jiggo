@@ -40,9 +40,34 @@ Future<void> reveal(WidgetTester t, Finder f) async {
 }
 
 Future<void> tap(WidgetTester t, String label) async {
+  FocusManager.instance.primaryFocus?.unfocus();
+  await t.pumpAndSettle();
+  if (find.text(label).evaluate().isEmpty &&
+      ['Undo', 'Redo', 'আগের অবস্থায় ফেরাও'].contains(label)) {
+    await t.tap(find.byTooltip(label));
+    await t.pumpAndSettle();
+    return;
+  }
+  if (find.text(label).evaluate().isEmpty && label == 'Delete item') {
+    await tap(t, 'Move item');
+  }
+  if (find.text(label).evaluate().isEmpty && label == 'Save PDF copy') {
+    await t.tap(find.text('Save'));
+    await t.pumpAndSettle();
+  }
   await reveal(t, find.text(label));
   await t.tap(find.text(label));
   await t.pumpAndSettle();
+  if (label == 'Keep changes' &&
+      find.byType(AlertDialog).evaluate().isNotEmpty) {
+    await t.tap(
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.widgetWithText(FilledButton, 'Keep changes'),
+      ),
+    );
+    await t.pumpAndSettle();
+  }
 }
 
 Future<void> draw(WidgetTester t) async {
@@ -76,6 +101,43 @@ class Processor extends ImageEditProcessor {
 }
 
 void main() {
+  testWidgets(
+    'A placed text item can be selected, resized, undone, redone and applied',
+    (t) async {
+      List<PdfMark>? output;
+      await t.pumpWidget(
+        settingsApp(
+          AppSettings(store: MemorySettingsStore(), language: 'en'),
+          PdfMarkupScreen(
+            background: background(),
+            render: (image, marks) async {
+              output = List.of(marks);
+              return image;
+            },
+          ),
+        ),
+      );
+      await t.pumpAndSettle();
+      await tap(t, 'Add text');
+      await t.enterText(find.byKey(const ValueKey('pdf-markup-text')), 'Hello');
+      await tap(t, 'Next');
+      await draw(t);
+      await tap(t, 'Larger');
+      await tap(t, 'Undo');
+      await tap(t, 'Redo');
+      await tap(t, 'Scroll page');
+      final board = find.byKey(const ValueKey('pdf-markup-board'));
+      await reveal(t, board);
+      final rect = t.getRect(board);
+      await t.tapAt(rect.topLeft + Offset(rect.width * .61, rect.height * .41));
+      await t.pumpAndSettle();
+      await reveal(t, find.text('Larger'));
+      expect(find.text('Larger'), findsOneWidget);
+      await tap(t, 'Keep changes');
+      expect(output!.single.size, closeTo(.044, .0001));
+    },
+  );
+
   testWidgets(
     'text draw highlight signature undo redo delete apply pass exact marks',
     (t) async {
@@ -112,7 +174,7 @@ void main() {
       await tap(t, 'Redo');
       await tap(t, 'Delete item');
       await tap(t, 'Undo');
-      await tap(t, 'Apply to page');
+      await tap(t, 'Keep changes');
       expect(output!.map((m) => m.kind), [
         PdfMarkKind.text,
         PdfMarkKind.pen,
@@ -143,7 +205,7 @@ void main() {
     await t.pumpAndSettle();
     await tap(t, 'Draw');
     await draw(t);
-    await tap(t, 'Apply to page');
+    await tap(t, 'Keep changes');
     await reveal(
       t,
       find.text('Could not apply markup. Your page changes are kept here.'),
@@ -153,7 +215,7 @@ void main() {
       findsOneWidget,
     );
     fail = false;
-    await tap(t, 'Apply to page');
+    await tap(t, 'Keep changes');
     expect(count, 2);
   });
   testWidgets(
@@ -197,7 +259,7 @@ void main() {
       });
       await t.pumpAndSettle();
       await draw(t);
-      await tap(t, 'Apply to page');
+      await tap(t, 'Keep changes');
       expect(result!.single.kind, PdfMarkKind.image);
       expect(result!.single.image, isNotNull);
     },

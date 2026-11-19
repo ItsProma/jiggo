@@ -22,7 +22,11 @@ class JiggoNotice {
     this.revision = 0,
   });
 
-  static JiggoNotice? fromData(Map<String, dynamic> data, {DateTime? now}) {
+  static JiggoNotice? fromData(
+    Map<String, dynamic> data, {
+    DateTime? now,
+    Duration maxAge = const Duration(days: 1),
+  }) {
     final id = data['id'];
     final uid = data['ownerUid'];
     final title = data['title'];
@@ -49,7 +53,7 @@ class JiggoNotice {
       return null;
     }
     final current = (now ?? DateTime.now()).millisecondsSinceEpoch;
-    if (time < current - const Duration(days: 1).inMilliseconds ||
+    if (time < current - maxAge.inMilliseconds ||
         time > current + const Duration(minutes: 5).inMilliseconds) {
       return null;
     }

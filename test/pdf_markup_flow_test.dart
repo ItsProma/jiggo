@@ -71,7 +71,7 @@ void main() {
       );
       await t.pumpAndSettle();
       await tap(t, 'Open PDF');
-      await tap(t, 'Add page markup');
+      await tap(t, 'Edit page');
       final context = t.element(find.byType(PdfMarkupScreen));
       Navigator.pop(context, background());
       await t.pumpAndSettle();
@@ -101,7 +101,7 @@ void main() {
     );
     await t.pumpAndSettle();
     await tap(t, 'Open PDF');
-    await tap(t, 'Add page markup');
+    await tap(t, 'Edit page');
     Navigator.pop(t.element(find.byType(PdfMarkupScreen)), background());
     await t.pumpAndSettle();
     await tap(t, 'Save PDF copy');

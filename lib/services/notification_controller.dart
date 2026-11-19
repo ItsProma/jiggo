@@ -13,6 +13,8 @@ class NotificationController extends ChangeNotifier {
   final NotificationRegistry registry;
   final String? Function() currentUid;
   final List<JiggoNotice> _notices = [];
+  final Set<String> _readIds = {};
+  Future<void> _preferenceWork = Future.value();
   NotificationPreferences _preferences = NotificationPreferences.empty();
   NoticePermission permission = NoticePermission.notAsked;
   bool ready = false;
@@ -39,7 +41,7 @@ class NotificationController extends ChangeNotifier {
   bool get supported => permission != NoticePermission.unsupported;
   bool get web => driver.web;
   bool get pushConfigured => driver.pushConfigured;
-  List<JiggoNotice> get notices => List.unmodifiable(_notices);
+  List<JiggoNotice> get notices => List.unmodifiable(_notices.where((n)=>n.ownerUid==currentUid()));
 
   void _changed() {
     if (!_disposed) notifyListeners();
@@ -51,6 +53,10 @@ class NotificationController extends ChangeNotifier {
         await store.read().timeout(const Duration(seconds: 3)),
       );
       _account = _preferences.ownerUid;
+      if (_account != null && _account == currentUid()) {
+        _notices.addAll(_preferences.history);
+        _readIds.addAll(_preferences.readIds);
+      }
       await driver
           .initialize(
             onMessage: _receive,
@@ -89,7 +95,58 @@ class NotificationController extends ChangeNotifier {
     return 'Notification action failed. Check permission and try again.';
   }
 
-  Future<void> _persist() => store.write(_preferences.encode());
+  Future<void> _persist() {
+    _preferences = _preferences.copy(
+      ownerUid: _preferences.ownerUid,
+      history: _notices
+          .where((n) => n.ownerUid == _preferences.ownerUid)
+          .take(50)
+          .toList(),
+      readIds: Set.of(_readIds),
+    );
+    final value = _preferences.encode();
+    final writing = _preferenceWork.then((_) => store.write(value));
+    _preferenceWork = writing.catchError((Object _) {});
+    return writing;
+  }
+
+  bool isRead(String id) => _readIds.contains(id);
+  void _saveInbox() {
+    unawaited(
+      _persist().catchError((Object _) {
+        error = 'Your notification list could not be saved. Try again.';
+        _changed();
+      }),
+    );
+  }
+
+  void markAllRead() {
+    _readIds.addAll(
+      _notices.where((n) => n.ownerUid == currentUid()).map((n) => n.id),
+    );
+    _saveInbox();
+    _changed();
+  }
+
+  void removeNotice(String id) {
+    _notices.removeWhere((n) => n.id == id && n.ownerUid == currentUid());
+    _readIds.remove(id);
+    _saveInbox();
+    _changed();
+  }
+
+  void openSaved(JiggoNotice notice) {
+    if (notice.ownerUid != currentUid() ||
+        !_notices.any((n) => identical(n, notice))) {
+      return;
+    }
+    _readIds.add(notice.id);
+    pendingOpen = notice;
+    _saveInbox();
+    _changed();
+  }
+
+  Future<void> flushInbox() => _preferenceWork;
 
   Future<void> later() async {
     _preferences = _preferences.copy(
@@ -242,6 +299,11 @@ class NotificationController extends ChangeNotifier {
   Future<void> bindAccount(String? uid, String language) {
     _language = language == 'bn' ? 'bn' : 'en';
     if (_account == uid && _preferences.ownerUid == uid) {
+      if (_notices.isEmpty && uid != null) {
+        _notices.addAll(_preferences.history.where((n) => n.ownerUid == uid));
+        _readIds.addAll(_preferences.readIds);
+        _changed();
+      }
       _queueConnect();
       return _accountWork;
     }
@@ -250,13 +312,16 @@ class NotificationController extends ChangeNotifier {
     final session = ++_session;
     registered = false;
     _notices.clear();
+    _readIds.clear();
     foregroundNotice = null;
     _accountWork = _accountWork
         .then((_) async {
           if (_disposed || session != _session) return;
           await driver.cancelAll();
           // Rotate the registration when an installation changes account.
-          if (previous != null && previous != uid && (enabled || _preferences.cleanupPending)) {
+          if (previous != null &&
+              previous != uid &&
+              (enabled || _preferences.cleanupPending)) {
             try {
               await driver.unregister();
             } catch (_) {
@@ -339,6 +404,7 @@ class NotificationController extends ChangeNotifier {
     _account = null;
     registered = false;
     _notices.clear();
+    _readIds.clear();
     pendingOpen = null;
     foregroundNotice = null;
     _preferences = _preferences.copy(
@@ -387,7 +453,9 @@ class NotificationController extends ChangeNotifier {
   void _remember(JiggoNotice notice) {
     if (_notices.any((item) => item.id == notice.id)) return;
     _notices.insert(0, notice);
-    if (_notices.length > 20) _notices.removeLast();
+    if (_notices.length > 50) _notices.removeLast();
+    _readIds.removeWhere((id) => !_notices.any((n) => n.id == id));
+    _saveInbox();
   }
 
   void _receive(JiggoNotice notice) {
@@ -414,7 +482,11 @@ class NotificationController extends ChangeNotifier {
     final uid = currentUid();
     if (uid != null && uid != notice.ownerUid) return;
     pendingOpen = notice;
-    if (uid != null) _remember(notice);
+    if (uid != null) {
+      _remember(notice);
+      _readIds.add(notice.id);
+      _saveInbox();
+    }
     _changed();
   }
 
@@ -442,7 +514,9 @@ class NotificationController extends ChangeNotifier {
         revision: _preferences.revision,
       );
       await driver.updateAccount(uid, enabled, _preferences.revision);
-      if (currentUid() != uid || !enabled) { return; }
+      if (currentUid() != uid || !enabled) {
+        return;
+      }
       await driver.show(notice);
       _remember(notice);
     } catch (failure) {

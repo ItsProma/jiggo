@@ -75,15 +75,22 @@ class NotificationPermissionScreen extends StatelessWidget {
   }
 }
 
+class NotificationSettingsScreen extends StatelessWidget {
+  const NotificationSettingsScreen({super.key});
+  @override
+  Widget build(BuildContext context) =>
+      const NotificationsScreen(settingsOnly: true);
+}
+
 class NotificationsScreen extends StatefulWidget {
-  const NotificationsScreen({super.key});
+  final bool settingsOnly;
+  const NotificationsScreen({super.key, this.settingsOnly = false});
   @override
   State<NotificationsScreen> createState() => _NotificationsScreenState();
 }
 
 class _NotificationsScreenState extends State<NotificationsScreen>
     with WidgetsBindingObserver {
-  String _target = 'library';
   @override
   void initState() {
     super.initState();
@@ -112,21 +119,22 @@ class _NotificationsScreenState extends State<NotificationsScreen>
       if (!mounted || opened) return;
       await showDialog<void>(
         context: context,
-        builder: (context) => AlertDialog(
-          title: Text(context.tr('Browser notification settings')),
+        builder: (c) => AlertDialog(
+          title: Text(c.tr('Allow notifications')),
           content: Text(
-            context.tr(
-              'Open the site controls beside the address bar, choose Site settings, and allow Notifications. Then return here and tap Refresh.',
+            c.tr(
+              'In your browser, open the controls beside the address bar and allow Notifications. Then return to Jiggo.',
             ),
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text(context.tr('OK')),
+              onPressed: () => Navigator.pop(c),
+              child: Text(c.tr('OK')),
             ),
           ],
         ),
       );
+      if (mounted) await controller.refresh();
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -142,162 +150,228 @@ class _NotificationsScreenState extends State<NotificationsScreen>
     }
   }
 
+  Widget _permission(NotificationController controller, bool on) {
+    final blocked = controller.permission == NoticePermission.denied;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              context.tr(
+                blocked
+                    ? 'Notifications are blocked. Allow them in settings.'
+                    : 'Turn on notifications for important updates.',
+              ),
+            ),
+            const SizedBox(height: 8),
+            FilledButton.icon(
+              onPressed: controller.busy
+                  ? null
+                  : blocked
+                  ? () => _settings(controller)
+                  : controller.enable,
+              icon: const Icon(Icons.notifications_active_outlined),
+              label: Text(
+                context.tr(blocked ? 'Open settings' : 'Enable notifications'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final controller = NotificationScope.of(context);
     final on =
         controller.enabled && controller.permission == NoticePermission.granted;
-    final status = !controller.supported
-        ? 'Notifications are not supported on this device.'
-        : controller.permission == NoticePermission.denied
-        ? 'Permission is blocked in device or browser settings.'
-        : on
-        ? 'Notifications are on for this device.'
-        : 'Notifications are off. You can still use Jiggo.';
+    final localizations = MaterialLocalizations.of(context);
     return Scaffold(
-      appBar: AppBar(title: Text(context.tr('Notifications'))),
-      body: ListView(
-        padding: const EdgeInsets.all(20),
-        children: [
-          Icon(
-            on
-                ? Icons.notifications_active_outlined
-                : Icons.notifications_off_outlined,
-            size: 48,
-            color: Theme.of(context).colorScheme.primary,
+      appBar: AppBar(
+        title: Text(
+          context.tr(
+            widget.settingsOnly ? 'Notification settings' : 'Notifications',
           ),
-          const SizedBox(height: 16),
-          Text(context.tr(status), textAlign: TextAlign.center),
-          const SizedBox(height: 16),
-          if (controller.busy) const LinearProgressIndicator(),
-          if (controller.error != null)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              child: Text(
-                context.tr(controller.error!),
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
-              ),
-            ),
-          if (controller.supported) ...[
-            FilledButton.icon(
-              onPressed: controller.busy
+        ),
+        actions: [
+          if (!widget.settingsOnly) ...[
+            IconButton(
+              tooltip: context.tr('Mark all as read'),
+              onPressed: controller.notices.isEmpty
                   ? null
-                  : on
-                  ? controller.disable
-                  : controller.enable,
-              icon: Icon(
-                on
-                    ? Icons.notifications_off_outlined
-                    : Icons.notifications_active_outlined,
-              ),
-              label: Text(
-                context.tr(
-                  on ? 'Turn off on this device' : 'Enable notifications',
+                  : controller.markAllRead,
+              icon: const Icon(Icons.done_all),
+            ),
+            IconButton(
+              tooltip: context.tr('Notification settings'),
+              onPressed: () => Navigator.push<void>(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const NotificationSettingsScreen(),
                 ),
               ),
+              icon: const Icon(Icons.settings_outlined),
             ),
-            Wrap(
-              spacing: 8,
-              children: [
+          ],
+        ],
+      ),
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            if (controller.busy) const LinearProgressIndicator(),
+            if (controller.error != null)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Text(
+                  context.tr(
+                    'Notifications could not update. Check your connection and try again.',
+                  ),
+                ),
+              ),
+            if (widget.settingsOnly) ...[
+              Icon(
+                on
+                    ? Icons.notifications_active_outlined
+                    : Icons.notifications_off_outlined,
+                size: 48,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+              const SizedBox(height: 16),
+              SwitchListTile.adaptive(
+                contentPadding: EdgeInsets.zero,
+                title: Text(context.tr('Allow notifications')),
+                subtitle: Text(
+                  context.tr(on ? 'On for this device' : 'Off for this device'),
+                ),
+                value: on,
+                onChanged: controller.busy || !controller.supported
+                    ? null
+                    : (value) {
+                        if (value) {
+                          if (controller.permission ==
+                              NoticePermission.denied) {
+                            _settings(controller);
+                          } else {
+                            controller.enable();
+                          }
+                        } else {
+                          controller.disable();
+                        }
+                      },
+              ),
+              Text(
+                context.tr(
+                  'You can use every tool with notifications turned off.',
+                ),
+              ),
+              if (controller.permission == NoticePermission.denied)
                 TextButton.icon(
                   onPressed: controller.busy
                       ? null
                       : () => _settings(controller),
                   icon: const Icon(Icons.settings_outlined),
-                  label: Text(context.tr('Open permission settings')),
+                  label: Text(context.tr('Open settings')),
                 ),
-                TextButton.icon(
-                  onPressed: controller.busy ? null : controller.refresh,
-                  icon: const Icon(Icons.refresh),
-                  label: Text(context.tr('Refresh')),
+              if (!controller.supported)
+                Text(
+                  context.tr('Notifications are not supported on this device.'),
                 ),
-              ],
-            ),
-            const Divider(height: 32),
-            Text(
-              context.tr('Test on this device'),
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              context.tr('A test notification opens your Library when tapped.'),
-            ),
-            OutlinedButton.icon(
-              onPressed: on && !controller.busy
-                  ? () => controller.testDevice(
-                      title: context.tr('Jiggo test notification'),
-                      body: context.tr('This is a test. Tap to open Library.'),
-                    )
-                  : null,
-              icon: const Icon(Icons.send_outlined),
-              label: Text(context.tr('Show device test')),
-            ),
-            const Divider(height: 32),
-            Text(
-              context.tr('Remote notifications'),
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              context.tr(
-                !controller.pushConfigured
-                    ? 'Web push needs the public Firebase web-push key. Device testing is available without it.'
-                    : controller.registered
-                    ? 'This device is connected for remote notifications.'
-                    : 'Enable notifications and reconnect to register this device.',
-              ),
-            ),
-            const SizedBox(height: 12),
-            DropdownButtonFormField<String>(
-              initialValue: _target,
-              isExpanded: true,
-              decoration: InputDecoration(labelText: context.tr('Test opens')),
-              items: [
-                for (final target in notificationTargets)
-                  DropdownMenuItem(
-                    value: target,
-                    child: Text(context.tr(notificationTargetLabel(target))),
+              if (on && !controller.pushConfigured)
+                Padding(
+                  padding: const EdgeInsets.only(top: 12),
+                  child: Text(
+                    context.tr(
+                      'Updates are not ready on this device. Try updating Jiggo.',
+                    ),
                   ),
-              ],
-              onChanged: controller.busy
-                  ? null
-                  : (value) {
-                      if (value != null) setState(() => _target = value);
-                    },
-            ),
-            const SizedBox(height: 8),
-            OutlinedButton.icon(
-              onPressed: on && controller.registered && !controller.busy
-                  ? () => controller.testPush(_target)
-                  : null,
-              icon: const Icon(Icons.cloud_outlined),
-              label: Text(context.tr('Send push test')),
-            ),
-            Text(
-              context.tr(
-                'Up to 5 push tests per day. Allow 30 seconds between tests.',
+                ),
+              TextButton.icon(
+                onPressed: controller.busy ? null : controller.refresh,
+                icon: const Icon(Icons.refresh),
+                label: Text(context.tr('Check again')),
               ),
-            ),
+            ] else ...[
+              if (!on && controller.supported) _permission(controller, on),
+              if (controller.notices.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 64,
+                    horizontal: 20,
+                  ),
+                  child: Column(
+                    children: [
+                      Icon(
+                        Icons.notifications_none,
+                        size: 64,
+                        color: Theme.of(context).colorScheme.outline,
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        context.tr('No notifications yet'),
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        context.tr('Your updates will appear here.'),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
+                ),
+              for (final notice in controller.notices)
+                Card(
+                  child: ListTile(
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    leading: Icon(
+                      controller.isRead(notice.id)
+                          ? Icons.notifications_none
+                          : Icons.notifications_active_outlined,
+                      color: controller.isRead(notice.id)
+                          ? Theme.of(context).colorScheme.outline
+                          : Theme.of(context).colorScheme.primary,
+                    ),
+                    title: Text(
+                      notice.title,
+                      style: TextStyle(
+                        fontWeight: controller.isRead(notice.id)
+                            ? FontWeight.normal
+                            : FontWeight.bold,
+                      ),
+                    ),
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (notice.body.isNotEmpty) Text(notice.body),
+                        const SizedBox(height: 4),
+                        Text(
+                          '${localizations.formatShortDate(notice.sentAt.toLocal())} · ${localizations.formatTimeOfDay(TimeOfDay.fromDateTime(notice.sentAt.toLocal()))}',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ],
+                    ),
+                    onTap: () => controller.openSaved(notice),
+                    trailing: PopupMenuButton<String>(
+                      tooltip: context.tr('Notification options'),
+                      onSelected: (_) => controller.removeNotice(notice.id),
+                      itemBuilder: (_) => [
+                        PopupMenuItem(
+                          value: 'delete',
+                          child: Text(context.tr('Delete')),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
           ],
-          const Divider(height: 32),
-          Text(
-            context.tr('Received in this session'),
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
-          const SizedBox(height: 8),
-          if (controller.notices.isEmpty)
-            Text(context.tr('No notifications received in this session.')),
-          for (final notice in controller.notices)
-            Card(
-              child: ListTile(
-                isThreeLine: true,
-                title: Text(notice.title),
-                subtitle: Text(notice.body),
-                leading: const Icon(Icons.notifications_outlined),
-                onTap: () => controller.open(notice),
-              ),
-            ),
-        ],
+        ),
       ),
     );
   }

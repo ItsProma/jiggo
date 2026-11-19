@@ -1,5 +1,5 @@
 import 'widgets/local_files_panel.dart';
-import 'screens/file_editor_screen.dart';
+import 'screens/file_editor_hub_screen.dart';
 
 import 'package:firebase_messaging/firebase_messaging.dart';
 
@@ -94,7 +94,6 @@ class _JiggoAppState extends State<JiggoApp> {
   late final Future<void> Function() _beforeSignOut;
   bool _notificationBound = false;
   String? _notificationAccount;
-  String? _lastOpenedNotice;
   int _homeEvent = 0;
 
   void _syncNotificationAccount() {
@@ -139,8 +138,7 @@ class _JiggoAppState extends State<JiggoApp> {
       final notice = _notifications.pendingOpen;
       if (notice == null) return;
       _notifications.consumeOpen();
-      if (notice.ownerUid != _lastUid || notice.id == _lastOpenedNotice) return;
-      _lastOpenedNotice = notice.id;
+      if (notice.ownerUid != _lastUid) return;
       navigator.popUntil((route) => route.isFirst);
       final page = switch (notice.target) {
         'scan' => const ScanScreen(),
@@ -405,7 +403,7 @@ class _JiggoHomePageState extends State<JiggoHomePage> {
       case HomeTool.fileEditor:
         Navigator.push<void>(
           context,
-          MaterialPageRoute<void>(builder: (_) => const FileEditorScreen()),
+          MaterialPageRoute<void>(builder: (_) => const FileEditorHubScreen()),
         );
         break;
     }

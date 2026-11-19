@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app_settings.dart';
+import 'notification_models.dart';
 
 class NotificationPreferencesStore implements SettingsStore {
   static const key = 'jiggo.notifications.v1';
@@ -21,6 +22,8 @@ class NotificationPreferences {
   final String? ownerUid;
   final int revision;
   final bool cleanupPending;
+  final List<JiggoNotice> history;
+  final Set<String> readIds;
   const NotificationPreferences({
     required this.prompted,
     required this.enabled,
@@ -28,6 +31,8 @@ class NotificationPreferences {
     this.ownerUid,
     this.revision = 0,
     this.cleanupPending = false,
+    this.history = const [],
+    this.readIds = const {},
   });
 
   factory NotificationPreferences.empty() => NotificationPreferences(
@@ -38,13 +43,38 @@ class NotificationPreferences {
 
   factory NotificationPreferences.decode(String? value) {
     try {
-      final data = value == null ? null : jsonDecode(value);
+      final data = value == null || value.length > 180000
+          ? null
+          : jsonDecode(value);
       if (data is Map &&
           data['installationId'] is String &&
           RegExp(
             r'^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$',
           ).hasMatch(data['installationId'])) {
+        final history = <JiggoNotice>[];
+        if (data['history'] is List) {
+          for (final raw in (data['history'] as List).take(50)) {
+            if (raw is! Map) continue;
+            final notice = JiggoNotice.fromData(
+              Map<String, dynamic>.from(raw),
+              maxAge: const Duration(days: 30),
+            );
+            if (notice != null &&
+                notice.ownerUid == data['ownerUid'] &&
+                !history.any((n) => n.id == notice.id)) {
+              history.add(notice);
+            }
+          }
+        }
+        final read = data['readIds'] is List
+            ? (data['readIds'] as List)
+                  .whereType<String>()
+                  .where((id) => history.any((n) => n.id == id))
+                  .toSet()
+            : <String>{};
         return NotificationPreferences(
+          history: history,
+          readIds: read,
           prompted: data['prompted'] == true,
           enabled: data['enabled'] == true,
           installationId: data['installationId'],
@@ -55,7 +85,7 @@ class NotificationPreferences {
           cleanupPending: data['cleanupPending'] == true,
         );
       }
-    } on FormatException {
+    } catch (_) {
       /* Recover without blocking login. */
     }
     return NotificationPreferences.empty();
@@ -67,7 +97,11 @@ class NotificationPreferences {
     required String? ownerUid,
     int? revision,
     bool? cleanupPending,
+    List<JiggoNotice>? history,
+    Set<String>? readIds,
   }) => NotificationPreferences(
+    history: history ?? (ownerUid == this.ownerUid ? this.history : const []),
+    readIds: readIds ?? (ownerUid == this.ownerUid ? this.readIds : const {}),
     prompted: prompted ?? this.prompted,
     enabled: enabled ?? this.enabled,
     installationId: installationId,
@@ -83,6 +117,8 @@ class NotificationPreferences {
     'ownerUid': ownerUid,
     'revision': revision,
     'cleanupPending': cleanupPending,
+    'history': history.take(50).map((n) => n.data).toList(),
+    'readIds': readIds.where((id) => history.any((n) => n.id == id)).toList(),
   });
 
   static String newInstallationId() {

@@ -26,6 +26,53 @@ class AppStrings {
   }
 
   static const Map<String, String> bangla = {
+    "Notification settings": "নোটিফিকেশন সেটিংস",
+    "Allow notifications": "নোটিফিকেশন চালু রাখো",
+    "On for this device": "এই ডিভাইসে চালু",
+    "Off for this device": "এই ডিভাইসে বন্ধ",
+    "You can use every tool with notifications turned off.":
+        "নোটিফিকেশন বন্ধ থাকলেও সব টুল ব্যবহার করতে পারবে।",
+    "Notifications are blocked. Allow them in settings.":
+        "নোটিফিকেশনের অনুমতি বন্ধ আছে। সেটিংস থেকে অনুমতি দাও।",
+    "Turn on notifications for important updates.":
+        "গুরুত্বপূর্ণ আপডেট পেতে নোটিফিকেশন চালু করো।",
+    "Open settings": "সেটিংস খোলো",
+    "Check again": "আবার দেখো",
+    "No notifications yet": "এখনো কোনো নোটিফিকেশন নেই",
+    "Your updates will appear here.": "নতুন আপডেট এখানে দেখাবে।",
+    "Mark all as read": "সব পড়া হয়েছে হিসেবে রাখো",
+    "Notification options": "নোটিফিকেশনের অপশন",
+    "Notifications could not update. Check your connection and try again.":
+        "নোটিফিকেশন আপডেট হয়নি। ইন্টারনেট দেখে আবার চেষ্টা করো।",
+    "Your notification list could not be saved. Try again.":
+        "নোটিফিকেশনের তালিকা সেভ হয়নি। আবার চেষ্টা করো।",
+    "Updates are not ready on this device. Try updating Jiggo.":
+        "এই ডিভাইসে আপডেট পাওয়ার ব্যবস্থা প্রস্তুত নেই। Jiggo আপডেট করে দেখো।",
+    "In your browser, open the controls beside the address bar and allow Notifications. Then return to Jiggo.": "ব্রাউজারের address bar-এর পাশের সাইট সেটিংস খুলে Notifications-এর অনুমতি দাও। এরপর Jiggo-তে ফিরে আসো।",
+    "What would you like to edit?": "কোন ফাইল এডিট করবে?",
+    "Choose a file type to get started.": "শুরু করতে ফাইলের ধরন বেছে নাও।",
+    "Arrange pages. Add text, images and signatures.":
+        "পৃষ্ঠা সাজাও। লেখা, ছবি ও স্বাক্ষর যোগ করো।",
+    "Word Document": "ওয়ার্ড ডকুমেন্ট",
+    "Text Editor": "টেক্সট এডিটর",
+    "Edit DOCX text and formatting.": "DOCX-এর লেখা ও ফরম্যাট বদলাও।",
+    "Crop, rotate, resize and add text.":
+        "ছবি কাটো, ঘোরাও, সাইজ বদলাও ও লেখা যোগ করো।",
+    "Write, paste or open a TXT file.":
+        "লেখো, লেখা পেস্ট করো বা TXT ফাইল খোলো।",
+    "Edit page": "পৃষ্ঠা এডিট",
+    "Arrange pages": "পৃষ্ঠা সাজাও",
+    "Choose a page, then an action.": "প্রথমে পৃষ্ঠা, তারপর কাজ বেছে নাও।",
+    "Open a PDF to start editing": "এডিট করতে PDF খোলো",
+    "PDF options": "PDF-এর অপশন",
+    "PDF editing help": "PDF এডিটের সাহায্য",
+    "Help": "সাহায্য",
+    "Keep changes": "পরিবর্তন রাখো",
+    "Smaller": "ছোট করো",
+    "Larger": "বড় করো",
+    "Ready to keep these changes?": "পরিবর্তন রাখবে?",
+    "This edited page will be saved as an image. Text on it will not be selectable or searchable. Your original PDF is kept.": "এডিট করা পৃষ্ঠা ছবির মতো সেভ হবে। এই পৃষ্ঠার লেখা সিলেক্ট বা সার্চ করা যাবে না। মূল PDF অক্ষত থাকবে।",
+
     "View all": "সব দেখো",
     "Save to Library": "লাইব্রেরিতে সেভ করো",
     "Saved to Library on this device.": "এই ডিভাইসের লাইব্রেরিতে সেভ হয়েছে।",

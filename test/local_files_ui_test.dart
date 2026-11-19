@@ -47,6 +47,11 @@ Future<void> saveToLibrary(WidgetTester t) async {
   FocusManager.instance.primaryFocus?.unfocus();
   await t.pumpAndSettle();
   final button = find.byKey(const ValueKey('local-library-save'));
+  if (button.evaluate().isEmpty &&
+      find.byType(PdfEditorScreen).evaluate().isNotEmpty) {
+    await t.tap(find.text('Save'));
+    await t.pumpAndSettle();
+  }
   await t.ensureVisible(button);
   await t.pumpAndSettle();
   await t.tap(button);

@@ -55,6 +55,40 @@ TextPainter _textPainter(PdfMark mark, Size size) {
   return painter;
 }
 
+/// Matches painted bounds for touch selection and the editor-only selection outline.
+Rect pdfMarkBounds(PdfMark mark, Size size) {
+  if (mark.kind == PdfMarkKind.text) {
+    final p = _textPainter(mark, size);
+    try {
+      return Rect.fromLTWH(
+        (mark.points.first.dx * size.width).clamp(
+          0.0,
+          math.max(0.0, size.width - p.width),
+        ),
+        (mark.points.first.dy * size.height).clamp(
+          0.0,
+          math.max(0.0, size.height - p.height),
+        ),
+        p.width,
+        p.height,
+      );
+    } finally {
+      p.dispose();
+    }
+  }
+  if (mark.kind == PdfMarkKind.image || mark.kind == PdfMarkKind.highlight) {
+    return pdfMarkRect(mark, size);
+  }
+  final xs = mark.points.map((p) => p.dx * size.width),
+      ys = mark.points.map((p) => p.dy * size.height);
+  return Rect.fromLTRB(
+    xs.reduce(math.min),
+    ys.reduce(math.min),
+    xs.reduce(math.max),
+    ys.reduce(math.max),
+  ).inflate(math.min(size.width, size.height) * mark.size / 2);
+}
+
 bool pdfMarkTextFits(PdfMark mark, Size size) {
   if (!mark.valid) return false;
   final p = _textPainter(mark, size);

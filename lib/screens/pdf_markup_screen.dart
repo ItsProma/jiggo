@@ -37,7 +37,7 @@ class _PdfMarkupScreenState extends State<PdfMarkupScreen> {
   int _selected = -1, _pointer = -1;
   List<Offset> _stroke = [];
   Offset? _start;
-  bool _busy = false, _leaving = false, _scrollMode = true;
+  bool _busy = false, _leaving = false, _scrollMode = true, _confirming = false;
   int _color = 0xff111111;
   double _size = .008;
   String? _notice;
@@ -214,6 +214,44 @@ class _PdfMarkupScreenState extends State<PdfMarkupScreen> {
     }
   }
 
+  void _resizeSelected(double factor) {
+    if (_selected < 0 || _busy) return;
+    final old = _history.marks[_selected];
+    var points = old.points;
+    if (old.kind != PdfMarkKind.text && old.kind != PdfMarkKind.image) {
+      final center = Offset(
+        (points.map((p) => p.dx).reduce(math.min) +
+                points.map((p) => p.dx).reduce(math.max)) /
+            2,
+        (points.map((p) => p.dy).reduce(math.min) +
+                points.map((p) => p.dy).reduce(math.max)) /
+            2,
+      );
+      points = points.map((p) => center + (p - center) * factor).toList();
+    }
+    final mark = PdfMark(
+      kind: old.kind,
+      points: points,
+      color: old.color,
+      size: (old.size * factor).clamp(.002, .45),
+      text: old.text,
+      image: old.image,
+      imageAspect: old.imageAspect,
+    );
+    if (!mark.valid ||
+        (mark.kind == PdfMarkKind.text &&
+            !pdfMarkTextFits(
+              mark,
+              Size(
+                widget.background.width.toDouble(),
+                widget.background.height.toDouble(),
+              ),
+            ))) {
+      return;
+    }
+    _safe(() => _history.replace(_selected, mark));
+  }
+
   void _resizePending(double value) {
     if (_pending?.kind == PdfMarkKind.text) {
       final mark = PdfMark(
@@ -276,8 +314,16 @@ class _PdfMarkupScreenState extends State<PdfMarkupScreen> {
           imageAspect: _pending!.imageAspect,
         );
       } else if (_tool == _Tool.move) {
-        if (_selected >= 0 && _selected < _history.marks.length) {
-          _moving = _history.marks[_selected];
+        _selected = -1;
+        for (var i = _history.marks.length - 1; i >= 0; i--) {
+          if (pdfMarkBounds(
+            _history.marks[i],
+            size,
+          ).inflate(10).contains(e.localPosition)) {
+            _selected = i;
+            _moving = _history.marks[i];
+            break;
+          }
         }
       } else if ([
         _Tool.pen,
@@ -311,7 +357,9 @@ class _PdfMarkupScreenState extends State<PdfMarkupScreen> {
     if (mark != null) {
       _safe(() {
         if (_tool == _Tool.move && _pending == null && _selected >= 0) {
-          _history.replace(_selected, mark);
+          if (!identical(mark, _history.marks[_selected])) {
+            _history.replace(_selected, mark);
+          }
         } else {
           _history.add(mark);
           _selected = _history.marks.length - 1;
@@ -365,8 +413,35 @@ class _PdfMarkupScreenState extends State<PdfMarkupScreen> {
 
   Future<void> _apply() async {
     if (_busy || _pending != null || _history.marks.isEmpty) return;
-    setState(() => _busy = true);
+    setState(() {
+      _busy = true;
+      _confirming = true;
+    });
     try {
+      final keep = await showDialog<bool>(
+        context: context,
+        builder: (c) => AlertDialog(
+          scrollable: true,
+          title: Text(c.tr('Ready to keep these changes?')),
+          content: Text(
+            c.tr(
+              'This edited page will be saved as an image. Text on it will not be selectable or searchable. Your original PDF is kept.',
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(c, false),
+              child: Text(c.tr('Cancel')),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(c, true),
+              child: Text(c.tr('Keep changes')),
+            ),
+          ],
+        ),
+      );
+      if (!mounted || keep != true) return;
+      setState(() => _confirming = false);
       final image = await (widget.render ?? renderPdfMarks)(
         widget.background,
         _history.marks,
@@ -383,7 +458,12 @@ class _PdfMarkupScreenState extends State<PdfMarkupScreen> {
         );
       }
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _confirming = false;
+        });
+      }
     }
   }
 
@@ -411,11 +491,45 @@ class _PdfMarkupScreenState extends State<PdfMarkupScreen> {
       },
       child: Scaffold(
         appBar: AppBar(
-          title: Text(
-            context.tr('Page markup'),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
+          title: Text(context.tr('Edit page')),
+          actions: [
+            IconButton(
+              tooltip: context.tr('Undo'),
+              onPressed: _busy || !_history.canUndo
+                  ? null
+                  : () {
+                      _pending = null;
+                      _history.undo();
+                    },
+              icon: const Icon(Icons.undo),
+            ),
+            IconButton(
+              tooltip: context.tr('Redo'),
+              onPressed: _busy || !_history.canRedo ? null : _history.redo,
+              icon: const Icon(Icons.redo),
+            ),
+            IconButton(
+              tooltip: context.tr('Help'),
+              onPressed: () => showDialog<void>(
+                context: context,
+                builder: (c) => AlertDialog(
+                  title: Text(c.tr('Edit page')),
+                  content: Text(
+                    c.tr(
+                      'Applied markup turns this page into an image. Text on this page will not be selectable or searchable. Keep your original PDF.',
+                    ),
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(c),
+                      child: Text(c.tr('OK')),
+                    ),
+                  ],
+                ),
+              ),
+              icon: const Icon(Icons.help_outline),
+            ),
+          ],
         ),
         bottomNavigationBar: SafeArea(
           child: Padding(
@@ -442,7 +556,7 @@ class _PdfMarkupScreenState extends State<PdfMarkupScreen> {
                         ? null
                         : _apply,
                     child: Text(
-                      context.tr('Apply to page'),
+                      context.tr('Keep changes'),
                       textAlign: TextAlign.center,
                     ),
                   ),
@@ -453,37 +567,52 @@ class _PdfMarkupScreenState extends State<PdfMarkupScreen> {
         ),
         body: Column(
           children: [
-            if (_busy) const LinearProgressIndicator(),
+            if (_busy && !_confirming) const LinearProgressIndicator(),
             Expanded(
               child: ListView(
                 padding: const EdgeInsets.all(12),
                 children: [
-                  Text(
-                    context.tr(
-                      'Applied markup turns this page into an image. Text on this page will not be selectable or searchable. Keep your original PDF.',
-                    ),
-                  ),
-                  const SizedBox(height: 8),
                   Wrap(
                     spacing: 6,
                     runSpacing: 4,
                     children: [
                       OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          backgroundColor: !_scrollMode && _tool == _Tool.move
+                              ? Theme.of(context).colorScheme.secondaryContainer
+                              : null,
+                        ),
                         onPressed: _busy ? null : () => _choose(_Tool.move),
                         icon: const Icon(Icons.open_with),
                         label: Text(context.tr('Move item')),
                       ),
                       OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          backgroundColor: !_scrollMode && _tool == _Tool.text
+                              ? Theme.of(context).colorScheme.secondaryContainer
+                              : null,
+                        ),
                         onPressed: _busy ? null : _addText,
                         icon: const Icon(Icons.text_fields),
                         label: Text(context.tr('Add text')),
                       ),
                       OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          backgroundColor: !_scrollMode && _tool == _Tool.image
+                              ? Theme.of(context).colorScheme.secondaryContainer
+                              : null,
+                        ),
                         onPressed: _busy ? null : _addImage,
                         icon: const Icon(Icons.image_outlined),
                         label: Text(context.tr('Add image')),
                       ),
                       OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          backgroundColor:
+                              !_scrollMode && _tool == _Tool.highlight
+                              ? Theme.of(context).colorScheme.secondaryContainer
+                              : null,
+                        ),
                         onPressed: _busy
                             ? null
                             : () => _choose(_Tool.highlight),
@@ -491,43 +620,53 @@ class _PdfMarkupScreenState extends State<PdfMarkupScreen> {
                         label: Text(context.tr('Highlight area')),
                       ),
                       OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          backgroundColor: !_scrollMode && _tool == _Tool.pen
+                              ? Theme.of(context).colorScheme.secondaryContainer
+                              : null,
+                        ),
                         onPressed: _busy ? null : () => _choose(_Tool.pen),
                         icon: const Icon(Icons.draw),
                         label: Text(context.tr('Draw')),
                       ),
                       OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          backgroundColor:
+                              !_scrollMode && _tool == _Tool.signature
+                              ? Theme.of(context).colorScheme.secondaryContainer
+                              : null,
+                        ),
                         onPressed: _busy
                             ? null
                             : () => _choose(_Tool.signature),
                         icon: const Icon(Icons.gesture),
                         label: Text(context.tr('Draw signature')),
                       ),
-                      OutlinedButton.icon(
-                        onPressed: _busy || !_history.canUndo
-                            ? null
-                            : () {
-                                _pending = null;
-                                _history.undo();
-                              },
-                        icon: const Icon(Icons.undo),
-                        label: Text(context.tr('Undo')),
-                      ),
-                      OutlinedButton.icon(
-                        onPressed: _busy || !_history.canRedo
-                            ? null
-                            : _history.redo,
-                        icon: const Icon(Icons.redo),
-                        label: Text(context.tr('Redo')),
-                      ),
-                      OutlinedButton.icon(
-                        onPressed: _busy || _selected < 0
-                            ? null
-                            : () => _safe(() => _history.remove(_selected)),
-                        icon: const Icon(Icons.delete_outline),
-                        label: Text(context.tr('Delete item')),
-                      ),
                     ],
                   ),
+                  if (_tool == _Tool.move && _selected >= 0 && _pending == null)
+                    Wrap(
+                      spacing: 6,
+                      children: [
+                        TextButton.icon(
+                          onPressed: _busy ? null : () => _resizeSelected(.9),
+                          icon: const Icon(Icons.remove),
+                          label: Text(context.tr('Smaller')),
+                        ),
+                        TextButton.icon(
+                          onPressed: _busy ? null : () => _resizeSelected(1.1),
+                          icon: const Icon(Icons.add),
+                          label: Text(context.tr('Larger')),
+                        ),
+                        TextButton.icon(
+                          onPressed: _busy
+                              ? null
+                              : () => _safe(() => _history.remove(_selected)),
+                          icon: const Icon(Icons.delete_outline),
+                          label: Text(context.tr('Delete item')),
+                        ),
+                      ],
+                    ),
                   if (_pending != null) ...[
                     Text(
                       context.tr(
@@ -556,64 +695,79 @@ class _PdfMarkupScreenState extends State<PdfMarkupScreen> {
                             : 'Draw on the page with your finger or mouse.',
                       ),
                     ),
-                  Wrap(
-                    spacing: 12,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      Text(context.tr('Color')),
-                      DropdownButton<int>(
-                        value: _color,
-                        onChanged: _busy
-                            ? null
-                            : (v) => setState(() => _color = v!),
-                        items: [
-                          DropdownMenuItem(
-                            value: 0xff111111,
-                            child: Text(context.tr('Black')),
+                  if (_tool != _Tool.move && _tool != _Tool.image)
+                    Wrap(
+                      spacing: 12,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        Text(context.tr('Color')),
+                        DropdownButton<int>(
+                          value: _color,
+                          onChanged: _busy
+                              ? null
+                              : (v) => setState(() => _color = v!),
+                          items: [
+                            DropdownMenuItem(
+                              value: 0xff111111,
+                              child: Text(context.tr('Black')),
+                            ),
+                            DropdownMenuItem(
+                              value: 0xff4355c8,
+                              child: Text(context.tr('Blue')),
+                            ),
+                            DropdownMenuItem(
+                              value: 0xffd32f2f,
+                              child: Text(context.tr('Red')),
+                            ),
+                            DropdownMenuItem(
+                              value: 0xff15804a,
+                              child: Text(context.tr('Green')),
+                            ),
+                            DropdownMenuItem(
+                              value: 0xffffd600,
+                              child: Text(context.tr('Yellow')),
+                            ),
+                          ],
+                        ),
+                        if (_tool != _Tool.move && _tool != _Tool.highlight)
+                          SizedBox(
+                            width: 200,
+                            child: Column(
+                              children: [
+                                Text(context.tr('Size')),
+                                Slider(
+                                  value: _size,
+                                  min: _tool == _Tool.text
+                                      ? .018
+                                      : _tool == _Tool.image
+                                      ? .05
+                                      : .002,
+                                  max: _tool == _Tool.text
+                                      ? .12
+                                      : _tool == _Tool.image
+                                      ? .45
+                                      : .025,
+                                  onChanged: _busy ? null : _resizePending,
+                                ),
+                              ],
+                            ),
                           ),
-                          DropdownMenuItem(
-                            value: 0xff4355c8,
-                            child: Text(context.tr('Blue')),
-                          ),
-                          DropdownMenuItem(
-                            value: 0xffd32f2f,
-                            child: Text(context.tr('Red')),
-                          ),
-                          DropdownMenuItem(
-                            value: 0xff15804a,
-                            child: Text(context.tr('Green')),
-                          ),
-                          DropdownMenuItem(
-                            value: 0xffffd600,
-                            child: Text(context.tr('Yellow')),
-                          ),
-                        ],
-                      ),
-                      if (_tool != _Tool.move && _tool != _Tool.highlight)
-                        SizedBox(
-                          width: 200,
-                          child: Column(
-                            children: [
-                              Text(context.tr('Size')),
-                              Slider(
-                                value: _size,
-                                min: _tool == _Tool.text
-                                    ? .018
-                                    : _tool == _Tool.image
-                                    ? .05
-                                    : .002,
-                                max: _tool == _Tool.text
-                                    ? .12
-                                    : _tool == _Tool.image
-                                    ? .45
-                                    : .025,
-                                onChanged: _busy ? null : _resizePending,
-                              ),
-                            ],
+                      ],
+                    ),
+                  if (_tool == _Tool.image && _pending != null)
+                    Row(
+                      children: [
+                        Text(context.tr('Size')),
+                        Expanded(
+                          child: Slider(
+                            value: _size,
+                            min: .05,
+                            max: .45,
+                            onChanged: _busy ? null : _resizePending,
                           ),
                         ),
-                    ],
-                  ),
+                      ],
+                    ),
                   LayoutBuilder(
                     builder: (c, constraints) {
                       final aspect =
@@ -629,33 +783,67 @@ class _PdfMarkupScreenState extends State<PdfMarkupScreen> {
                             child: LayoutBuilder(
                               builder: (c, box) {
                                 final size = Size(box.maxWidth, box.maxHeight);
-                                return RawGestureDetector(
-                                  gestures: _scrollMode
-                                      ? {}
-                                      : {
-                                          EagerGestureRecognizer:
-                                              GestureRecognizerFactoryWithHandlers<
-                                                EagerGestureRecognizer
-                                              >(
-                                                () => EagerGestureRecognizer(),
-                                                (_) {},
-                                              ),
+                                return GestureDetector(
+                                  onTapUp: !_scrollMode || _busy
+                                      ? null
+                                      : (details) {
+                                          for (
+                                            var i = _history.marks.length - 1;
+                                            i >= 0;
+                                            i--
+                                          ) {
+                                            if (pdfMarkBounds(
+                                                  _history.marks[i],
+                                                  size,
+                                                )
+                                                .inflate(10)
+                                                .contains(
+                                                  details.localPosition,
+                                                )) {
+                                              setState(() {
+                                                _selected = i;
+                                                _tool = _Tool.move;
+                                                _scrollMode = false;
+                                                _pending = null;
+                                              });
+                                              break;
+                                            }
+                                          }
                                         },
-                                  child: Listener(
-                                    key: const ValueKey('pdf-markup-board'),
-                                    onPointerDown: (e) => _down(e, size),
-                                    onPointerMove: (e) => _move(e, size),
-                                    onPointerUp: _up,
-                                    onPointerCancel: _cancel,
-                                    child: CustomPaint(
-                                      foregroundPainter: _MarksPainter(
-                                        marks,
-                                        _images,
-                                      ),
-                                      child: Image.memory(
-                                        widget.background.bytes,
-                                        fit: BoxFit.fill,
-                                        gaplessPlayback: true,
+                                  child: RawGestureDetector(
+                                    gestures: _scrollMode
+                                        ? {}
+                                        : {
+                                            EagerGestureRecognizer:
+                                                GestureRecognizerFactoryWithHandlers<
+                                                  EagerGestureRecognizer
+                                                >(
+                                                  () =>
+                                                      EagerGestureRecognizer(),
+                                                  (_) {},
+                                                ),
+                                          },
+                                    child: Listener(
+                                      key: const ValueKey('pdf-markup-board'),
+                                      onPointerDown: (e) => _down(e, size),
+                                      onPointerMove: (e) => _move(e, size),
+                                      onPointerUp: _up,
+                                      onPointerCancel: _cancel,
+                                      child: CustomPaint(
+                                        foregroundPainter: _MarksPainter(
+                                          marks,
+                                          _images,
+                                          selected:
+                                              _pending == null &&
+                                                  _tool == _Tool.move
+                                              ? _selected
+                                              : -1,
+                                        ),
+                                        child: Image.memory(
+                                          widget.background.bytes,
+                                          fit: BoxFit.fill,
+                                          gaplessPlayback: true,
+                                        ),
                                       ),
                                     ),
                                   ),
@@ -707,12 +895,22 @@ class _PdfMarkupScreenState extends State<PdfMarkupScreen> {
 class _MarksPainter extends CustomPainter {
   final List<PdfMark> marks;
   final Map<Object, ui.Image> images;
-  _MarksPainter(this.marks, this.images);
+  final int selected;
+  _MarksPainter(this.marks, this.images, {this.selected = -1});
   @override
   void paint(Canvas canvas, Size size) {
     canvas.save();
     canvas.clipRect(Offset.zero & size);
     paintPdfMarks(canvas, size, marks, images: images);
+    if (selected >= 0 && selected < marks.length) {
+      canvas.drawRect(
+        pdfMarkBounds(marks[selected], size).inflate(3),
+        Paint()
+          ..color = const Color(0xff4355c8)
+          ..strokeWidth = 1.5
+          ..style = PaintingStyle.stroke,
+      );
+    }
     canvas.restore();
   }
 

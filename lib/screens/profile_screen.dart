@@ -364,7 +364,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 onTap: () => Navigator.push<void>(
                   context,
                   MaterialPageRoute<void>(
-                    builder: (_) => const NotificationsScreen(),
+                    builder: (_) => const NotificationSettingsScreen(),
                   ),
                 ),
               ),

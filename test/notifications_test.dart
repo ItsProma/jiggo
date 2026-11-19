@@ -45,6 +45,26 @@ class Fixture {
 }
 
 void main() {
+  test('Inbox persists read state, reopens while disabled, and deletion survives restart', () async {
+    final f=Fixture();await f.start();await f.controller.enable();f.driver.receive(f.notice());
+    f.controller.markAllRead();await f.controller.flushInbox();
+    final restarted=NotificationController(store:f.store,driver:FakeNotificationDriver(),registry:f.registry,currentUid:()=>f.uid);
+    await restarted.initialize();await restarted.bindAccount(f.uid,'en');
+    expect(restarted.notices,hasLength(1));expect(restarted.isRead('one'),isTrue);
+    await restarted.disable();restarted.openSaved(restarted.notices.single);expect(restarted.pendingOpen?.target,'library');
+    restarted.consumeOpen();restarted.openSaved(restarted.notices.single);expect(restarted.pendingOpen?.target,'library');
+    restarted.removeNotice('one');await restarted.flushInbox();
+    expect(NotificationPreferences.decode(f.store.value).history,isEmpty);
+    restarted.dispose();f.controller.dispose();
+  });
+  test('Notification history keeps recent days without accepting stale push payloads', () {
+    final f=Fixture();final older=JiggoNotice(id:'old',ownerUid:f.uid!,title:'Older update',body:'',target:'library',sentAt:DateTime.now().subtract(const Duration(days:3)));
+    expect(JiggoNotice.fromData(older.data),isNull);
+    final prefs=NotificationPreferences.empty().copy(ownerUid:f.uid,history:[older],readIds:{'old'});
+    expect(NotificationPreferences.decode(prefs.encode()).history.single.id,'old');
+    expect(NotificationPreferences.decode(prefs.copy(ownerUid:'other').encode()).history,isEmpty);
+  });
+
   test('Later followed by logout never contacts the push registry', () async {
     final f = Fixture();
     await f.start();
@@ -305,7 +325,7 @@ void main() {
       );
       await tester.pumpAndSettle();
       await tester.scrollUntilVisible(
-        find.text('এবার অ্যাপ খোলার পর পাওয়া নোটিফিকেশন'),
+        find.text('এখনো কোনো নোটিফিকেশন নেই'),
         250,
         scrollable: find.byType(Scrollable).first,
       );
@@ -343,7 +363,7 @@ void main() {
     },
   );
   testWidgets(
-    'Settings show missing web configuration and a usable local test',
+    'Inbox hides setup and developer tests, settings show a simple permission switch',
     (tester) async {
       final f = Fixture();
       f.driver.isWeb = true;
@@ -360,15 +380,14 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(
-        find.textContaining('public Firebase web-push key'),
-        findsOneWidget,
-      );
-      final test = find.text('Show device test');
-      await tester.ensureVisible(test);
-      await tester.tap(test);
+      expect(find.textContaining('public Firebase web-push key'), findsNothing);
+      expect(find.text('Show device test'), findsNothing);
+      expect(find.text('Send push test'), findsNothing);
+      expect(find.text('No notifications yet'), findsOneWidget);
+      await tester.tap(find.byTooltip('Notification settings'));
       await tester.pumpAndSettle();
-      expect(f.driver.shown, hasLength(1));
+      expect(find.byType(SwitchListTile), findsOneWidget);
+      expect(find.text('On for this device'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
   );

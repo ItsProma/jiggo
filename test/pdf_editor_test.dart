@@ -78,8 +78,42 @@ class Files implements PdfFileActions {
 Future<void> tap(WidgetTester t, String label) async {
   FocusManager.instance.primaryFocus?.unfocus();
   await t.pumpAndSettle();
+  const pageActions = [
+    'Rotate page',
+    'Move earlier',
+    'Move later',
+    'Delete page',
+    'Add PDF / Merge',
+    'Add blank page',
+    'পৃষ্ঠা ঘোরাও',
+  ];
+  if (find.text(label).evaluate().isEmpty && pageActions.contains(label)) {
+    final menu = find.text(
+      label == 'পৃষ্ঠা ঘোরাও' ? 'পৃষ্ঠা সাজাও' : 'Arrange pages',
+    );
+    await t.ensureVisible(menu);
+    await t.tap(menu);
+    await t.pumpAndSettle();
+  }
+  if (find.text(label).evaluate().isEmpty &&
+      ['Save PDF copy', 'Share PDF', 'PDF কপি সেভ করো'].contains(label)) {
+    await t.tap(find.text(label == 'PDF কপি সেভ করো' ? 'সেভ' : 'Save'));
+    await t.pumpAndSettle();
+  }
+  if (find.text(label).evaluate().isEmpty &&
+      label == 'Open PDF' &&
+      find.text('Arrange pages').evaluate().isNotEmpty) {
+    await t.tap(find.byTooltip('PDF options'));
+    await t.pumpAndSettle();
+  }
   if (find.text(label).evaluate().isEmpty) {
-    final scroll = find.byType(Scrollable).first;
+    final sheet = find.descendant(
+      of: find.byType(BottomSheet),
+      matching: find.byType(Scrollable),
+    );
+    final scroll = sheet.evaluate().isNotEmpty
+        ? sheet.last
+        : find.byType(Scrollable).first;
     t.state<ScrollableState>(scroll).position.jumpTo(0);
     await t.pumpAndSettle();
     await t.scrollUntilVisible(find.text(label), 180, scrollable: scroll);

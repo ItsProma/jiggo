@@ -2,9 +2,6 @@ import 'dart:convert';
 
 import '../services/local_file_saver.dart';
 import '../services/local_file_model.dart';
-import 'pdf_editor_screen.dart';
-import 'image_editor_screen.dart';
-import 'docx_editor_screen.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -233,7 +230,7 @@ class _FileEditorScreenState extends State<FileEditorScreen> {
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
       leading: BackButton(onPressed: _close),
-      title: Text(context.tr('File Editor')),
+      title: Text(context.tr('Text Editor')),
     ),
     body: SafeArea(
       child: SingleChildScrollView(
@@ -241,52 +238,7 @@ class _FileEditorScreenState extends State<FileEditorScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(context.tr('Text and TXT files')),
-            const SizedBox(height: 8),
-            Text(
-              context.tr(
-                'Edit text locally and save a new TXT copy before closing or refreshing. Use Word DOCX or Image Editor for other files. Use PDF Editor to arrange PDF pages.',
-              ),
-            ),
-            const SizedBox(height: 12),
-            OutlinedButton.icon(
-              onPressed: _busy
-                  ? null
-                  : () => Navigator.push<void>(
-                      context,
-                      MaterialPageRoute<void>(
-                        builder: (_) => const DocxEditorScreen(),
-                      ),
-                    ),
-              icon: const Icon(Icons.description_outlined),
-              label: Text(context.tr('Word DOCX')),
-            ),
-            const SizedBox(height: 8),
-            OutlinedButton.icon(
-              onPressed: _busy
-                  ? null
-                  : () => Navigator.push<void>(
-                      context,
-                      MaterialPageRoute<void>(
-                        builder: (_) => const ImageEditorScreen(),
-                      ),
-                    ),
-              icon: const Icon(Icons.image_outlined),
-              label: Text(context.tr('Image Editor')),
-            ),
-            const SizedBox(height: 8),
-            OutlinedButton.icon(
-              onPressed: _busy
-                  ? null
-                  : () => Navigator.push<void>(
-                      context,
-                      MaterialPageRoute<void>(
-                        builder: (_) => const PdfEditorScreen(),
-                      ),
-                    ),
-              icon: const Icon(Icons.picture_as_pdf_outlined),
-              label: Text(context.tr('PDF Editor')),
-            ),
+            Text(context.tr('Write, paste or open a TXT file.')),
             const SizedBox(height: 16),
             Wrap(
               spacing: 8,

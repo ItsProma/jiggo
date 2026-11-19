@@ -310,6 +310,171 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
     );
   }
 
+  Future<void> _help() => showDialog<void>(
+    context: context,
+    builder: (c) => AlertDialog(
+      title: Text(c.tr('PDF editing help')),
+      content: SingleChildScrollView(
+        child: Text(
+          "${c.tr('Arrange PDF pages or add page markup. Existing PDF text and images cannot be changed directly.')}\n\n${c.tr('Page copies may lose bookmarks, links between pages, forms and digital signatures. Keep your original.')}",
+        ),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(c), child: Text(c.tr('OK'))),
+      ],
+    ),
+  );
+  Future<void> _saveMenu() async {
+    if (_busy || !_hasPdf) return;
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      useSafeArea: true,
+      isScrollControlled: true,
+      builder: (c) => SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(c.tr('Save PDF'), style: Theme.of(c).textTheme.titleLarge),
+            const SizedBox(height: 12),
+            ListTile(
+              key: const ValueKey('local-library-save'),
+              leading: const Icon(Icons.library_add_outlined),
+              title: Text(c.tr('Save to Library')),
+              onTap: () => Navigator.pop(c, 'library'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.download),
+              title: Text(c.tr('Save PDF copy')),
+              onTap: () => Navigator.pop(c, 'download'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.share),
+              title: Text(c.tr('Share PDF')),
+              onTap: () => Navigator.pop(c, 'share'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (!mounted || action == null) return;
+    await _export(action == 'share', library: action == 'library');
+  }
+
+  Future<void> _rename() async {
+    final name = await showDialog<String>(
+      context: context,
+      builder: (_) => _PdfRenameDialog(name: _title.text),
+    );
+    if (mounted && name != null) setState(() => _title.text = name);
+  }
+
+  Future<void> _pagesMenu() async {
+    if (_busy || !_hasPdf) return;
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      useSafeArea: true,
+      isScrollControlled: true,
+      builder: (c) => StatefulBuilder(
+        builder: (c, update) => ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight:
+                ((MediaQuery.sizeOf(c).height > 0
+                            ? MediaQuery.sizeOf(c).height
+                            : View.of(c).physicalSize.height /
+                                  View.of(c).devicePixelRatio) -
+                        MediaQuery.viewInsetsOf(c).bottom)
+                    .clamp(180.0, 1400.0) *
+                .78,
+          ),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  c.tr('Arrange pages'),
+                  style: Theme.of(c).textTheme.titleLarge,
+                ),
+                const SizedBox(height: 8),
+                Text(c.tr('Choose a page, then an action.')),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 4,
+                  children: List.generate(
+                    _plan.pages.length,
+                    (i) => ChoiceChip(
+                      label: Text('${i + 1}'),
+                      selected: _selected == i,
+                      onSelected: (_) {
+                        setState(() => _selected = i);
+                        update(() {});
+                      },
+                    ),
+                  ),
+                ),
+                const Divider(height: 24),
+                for (final entry in <(String, String, IconData, bool)>[
+                  ('rotate', 'Rotate page', Icons.rotate_right, true),
+                  (
+                    'earlier',
+                    'Move earlier',
+                    Icons.arrow_upward,
+                    _selected > 0,
+                  ),
+                  (
+                    'later',
+                    'Move later',
+                    Icons.arrow_downward,
+                    _selected < _plan.pages.length - 1,
+                  ),
+                  (
+                    'delete',
+                    'Delete page',
+                    Icons.delete_outline,
+                    _plan.pages.length > 1,
+                  ),
+                  ('blank', 'Add blank page', Icons.note_add_outlined, true),
+                  ('merge', 'Add PDF / Merge', Icons.merge, true),
+                ])
+                  ListTile(
+                    enabled: entry.$4,
+                    leading: Icon(entry.$3),
+                    title: Text(c.tr(entry.$2)),
+                    onTap: entry.$4 ? () => Navigator.pop(c, entry.$1) : null,
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    if (!mounted || action == null) return;
+    switch (action) {
+      case 'rotate':
+        _edit(() => _plan.rotate(_selected));
+      case 'earlier':
+        _edit(() {
+          _plan.move(_selected, _selected - 1);
+          _selected--;
+        });
+      case 'later':
+        _edit(() {
+          _plan.move(_selected, _selected + 1);
+          _selected++;
+        });
+      case 'delete':
+        _edit(() => _plan.remove(_selected));
+      case 'blank':
+        await _open(append: true, blank: true);
+      case 'merge':
+        await _open(append: true);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final pages = _plan.pages;
@@ -325,214 +490,239 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
         }
       },
       child: Scaffold(
-        appBar: AppBar(title: Text(context.tr('PDF Editor'))),
-        body: Column(
-          children: [
-            if (_busy && !_asking) const LinearProgressIndicator(),
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.all(16),
-                children: [
-                  Text(
-                    context.tr(
-                      'Arrange PDF pages or add page markup. Existing PDF text and images cannot be changed directly.',
+        appBar: AppBar(
+          title: Text(context.tr('PDF Editor')),
+          actions: [
+            if (_hasPdf)
+              TextButton(
+                onPressed: _busy ? null : _saveMenu,
+                child: Text(context.tr('Save')),
+              ),
+            PopupMenuButton<String>(
+              tooltip: context.tr('PDF options'),
+              onSelected: (v) {
+                if (v == 'open') {
+                  _open();
+                } else if (v == 'rename') {
+                  _rename();
+                } else {
+                  _help();
+                }
+              },
+              itemBuilder: (c) => [
+                if (_hasPdf)
+                  PopupMenuItem(
+                    value: 'open',
+                    enabled: !_busy,
+                    child: Text(c.tr('Open PDF')),
+                  ),
+                if (_hasPdf)
+                  PopupMenuItem(
+                    value: 'rename',
+                    enabled: !_busy,
+                    child: Text(c.tr('Rename file')),
+                  ),
+                PopupMenuItem(value: 'help', child: Text(c.tr('Help'))),
+              ],
+            ),
+          ],
+        ),
+        body: SafeArea(
+          child: Column(
+            children: [
+              if (_busy && !_asking) const LinearProgressIndicator(),
+              Expanded(
+                child: LayoutBuilder(
+                  builder: (c, box) => ListView(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                    children: [
+                      if (!_hasPdf) ...[
+                        const SizedBox(height: 48),
+                        Icon(
+                          Icons.picture_as_pdf_outlined,
+                          size: 72,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                        const SizedBox(height: 20),
+                        Text(
+                          context.tr('Open a PDF to start editing'),
+                          textAlign: TextAlign.center,
+                          style: Theme.of(context).textTheme.titleLarge,
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          context.tr(
+                            'Arrange pages. Add text, images and signatures.',
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ] else ...[
+                        Text(
+                          _title.text,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.titleSmall,
+                        ),
+                        Row(
+                          children: [
+                            IconButton(
+                              tooltip: context.tr('Previous page'),
+                              onPressed: _busy || _selected == 0
+                                  ? null
+                                  : () => setState(() => _selected--),
+                              icon: const Icon(Icons.chevron_left),
+                            ),
+                            Expanded(
+                              child: Text(
+                                context.tr('Page {number} of {count}', {
+                                  'number': _selected + 1,
+                                  'count': pages.length,
+                                }),
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
+                            IconButton(
+                              tooltip: context.tr('Next page'),
+                              onPressed: _busy || _selected == pages.length - 1
+                                  ? null
+                                  : () => setState(() => _selected++),
+                              icon: const Icon(Icons.chevron_right),
+                            ),
+                          ],
+                        ),
+                        SizedBox(
+                          height: (box.maxHeight * .64).clamp(220.0, 650.0),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(12),
+                            child: ColoredBox(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .surfaceContainerHighest,
+                              child: InteractiveViewer(
+                                minScale: 1,
+                                maxScale: 5,
+                                child: SizedBox.expand(
+                                  child: _sources[pages[_selected].source]
+                                      .preview(
+                                        pages[_selected].index,
+                                        pages[_selected].turns,
+                                      ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        Wrap(
+                          alignment: WrapAlignment.center,
+                          children: [
+                            IconButton(
+                              tooltip: context.tr('Undo'),
+                              onPressed: _busy || !_plan.canUndo
+                                  ? null
+                                  : () => _edit(_plan.undo),
+                              icon: const Icon(Icons.undo),
+                            ),
+                            IconButton(
+                              tooltip: context.tr('Redo'),
+                              onPressed: _busy || !_plan.canRedo
+                                  ? null
+                                  : () => _edit(_plan.redo),
+                              icon: const Icon(Icons.redo),
+                            ),
+                            IconButton(
+                              tooltip: context.tr('Zoom'),
+                              onPressed: _busy ? null : _zoom,
+                              icon: const Icon(Icons.zoom_in),
+                            ),
+                          ],
+                        ),
+                      ],
+                      if (_notice != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: Text(context.tr(_notice!)),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+              if (!_hasPdf)
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      onPressed: _busy ? null : () => _open(),
+                      icon: const Icon(Icons.folder_open),
+                      label: Text(context.tr('Open PDF')),
                     ),
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    context.tr(
-                      'Page copies may lose bookmarks, links between pages, forms and digital signatures. Keep your original.',
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Wrap(
+                )
+              else
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+                  child: Wrap(
+                    alignment: WrapAlignment.center,
                     spacing: 8,
                     runSpacing: 8,
                     children: [
                       FilledButton.icon(
-                        onPressed: _busy ? null : () => _open(),
-                        icon: const Icon(Icons.folder_open),
-                        label: Text(context.tr('Open PDF')),
+                        onPressed: _busy ? null : _markup,
+                        icon: const Icon(Icons.edit_outlined),
+                        label: Text(context.tr('Edit page')),
                       ),
                       OutlinedButton.icon(
-                        onPressed: _busy || !_hasPdf
-                            ? null
-                            : () => _open(append: true),
-                        icon: const Icon(Icons.merge),
-                        label: Text(context.tr('Add PDF / Merge')),
-                      ),
-                      OutlinedButton.icon(
-                        onPressed: _busy || !_hasPdf
-                            ? null
-                            : () => _open(append: true, blank: true),
-                        icon: const Icon(Icons.note_add_outlined),
-                        label: Text(context.tr('Add blank page')),
+                        onPressed: _busy ? null : _pagesMenu,
+                        icon: const Icon(Icons.view_agenda_outlined),
+                        label: Text(context.tr('Arrange pages')),
                       ),
                     ],
                   ),
-                  if (_hasPdf) ...[
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: _title,
-                      enabled: !_busy,
-                      maxLength: 140,
-                      decoration: InputDecoration(
-                        labelText: context.tr('File title'),
-                      ),
-                      onChanged: (_) => setState(() {}),
-                    ),
-                    Text(
-                      context.tr('Page {number} of {count}', {
-                        'number': _selected + 1,
-                        'count': pages.length,
-                      }),
-                    ),
-                    const SizedBox(height: 8),
-                    SizedBox(
-                      height: 280,
-                      child: ColoredBox(
-                        color: Colors.grey.shade200,
-                        child: _sources[pages[_selected].source].preview(
-                          pages[_selected].index,
-                          pages[_selected].turns,
-                        ),
-                      ),
-                    ),
-                    Wrap(
-                      alignment: WrapAlignment.center,
-                      children: [
-                        IconButton(
-                          tooltip: context.tr('Previous page'),
-                          onPressed: _busy || _selected == 0
-                              ? null
-                              : () => setState(() => _selected--),
-                          icon: const Icon(Icons.chevron_left),
-                        ),
-                        IconButton(
-                          tooltip: context.tr('Zoom'),
-                          onPressed: _busy ? null : _zoom,
-                          icon: const Icon(Icons.zoom_in),
-                        ),
-                        IconButton(
-                          tooltip: context.tr('Next page'),
-                          onPressed: _busy || _selected == pages.length - 1
-                              ? null
-                              : () => setState(() => _selected++),
-                          icon: const Icon(Icons.chevron_right),
-                        ),
-                        IconButton(
-                          tooltip: context.tr('Undo'),
-                          onPressed: _busy || !_plan.canUndo
-                              ? null
-                              : () => _edit(_plan.undo),
-                          icon: const Icon(Icons.undo),
-                        ),
-                        IconButton(
-                          tooltip: context.tr('Redo'),
-                          onPressed: _busy || !_plan.canRedo
-                              ? null
-                              : () => _edit(_plan.redo),
-                          icon: const Icon(Icons.redo),
-                        ),
-                      ],
-                    ),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        FilledButton.icon(
-                          onPressed: _busy ? null : _markup,
-                          icon: const Icon(Icons.edit_note),
-                          label: Text(context.tr('Add page markup')),
-                        ),
-                        OutlinedButton.icon(
-                          onPressed: _busy
-                              ? null
-                              : () => _edit(() => _plan.rotate(_selected)),
-                          icon: const Icon(Icons.rotate_right),
-                          label: Text(context.tr('Rotate page')),
-                        ),
-                        OutlinedButton.icon(
-                          onPressed: _busy || _selected == 0
-                              ? null
-                              : () => _edit(() {
-                                  _plan.move(_selected, _selected - 1);
-                                  _selected--;
-                                }),
-                          icon: const Icon(Icons.arrow_upward),
-                          label: Text(context.tr('Move earlier')),
-                        ),
-                        OutlinedButton.icon(
-                          onPressed: _busy || _selected == pages.length - 1
-                              ? null
-                              : () => _edit(() {
-                                  _plan.move(_selected, _selected + 1);
-                                  _selected++;
-                                }),
-                          icon: const Icon(Icons.arrow_downward),
-                          label: Text(context.tr('Move later')),
-                        ),
-                        OutlinedButton.icon(
-                          onPressed: _busy || pages.length == 1
-                              ? null
-                              : () => _edit(() => _plan.remove(_selected)),
-                          icon: const Icon(Icons.delete_outline),
-                          label: Text(context.tr('Delete page')),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    Text(context.tr('Page order')),
-                    Wrap(
-                      spacing: 6,
-                      children: List.generate(
-                        pages.length,
-                        (i) => ChoiceChip(
-                          label: Text('${i + 1}'),
-                          selected: i == _selected,
-                          onSelected: _busy
-                              ? null
-                              : (_) => setState(() => _selected = i),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        OutlinedButton.icon(
-                          key: const ValueKey('local-library-save'),
-                          onPressed: _busy || !_hasPdf
-                              ? null
-                              : () => _export(false, library: true),
-                          icon: const Icon(Icons.library_add_outlined),
-                          label: Text(context.tr('Save to Library')),
-                        ),
-                        FilledButton.icon(
-                          onPressed: _busy ? null : () => _export(false),
-                          icon: const Icon(Icons.save_alt),
-                          label: Text(context.tr('Save PDF copy')),
-                        ),
-                        OutlinedButton.icon(
-                          onPressed: _busy ? null : () => _export(true),
-                          icon: const Icon(Icons.share),
-                          label: Text(context.tr('Share PDF')),
-                        ),
-                      ],
-                    ),
-                  ],
-                  if (_notice != null)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 12),
-                      child: Text(context.tr(_notice!)),
-                    ),
-                ],
-              ),
-            ),
-          ],
+                ),
+            ],
+          ),
         ),
       ),
     );
   }
+}
+
+class _PdfRenameDialog extends StatefulWidget {
+  final String name;
+  const _PdfRenameDialog({required this.name});
+  @override
+  State<_PdfRenameDialog> createState() => _PdfRenameDialogState();
+}
+
+class _PdfRenameDialogState extends State<_PdfRenameDialog> {
+  late final _text = TextEditingController(text: widget.name);
+  @override
+  void dispose() {
+    _text.dispose();
+    super.dispose();
+  }
+
+  void _save() {
+    if (_text.text.trim().isNotEmpty && _text.text.length <= 140) {
+      Navigator.pop(context, _text.text.trim());
+    }
+  }
+
+  @override
+  Widget build(BuildContext c) => AlertDialog(
+    title: Text(c.tr('Rename file')),
+    content: TextField(
+      controller: _text,
+      maxLength: 140,
+      decoration: InputDecoration(labelText: c.tr('File title')),
+      onSubmitted: (_) => _save(),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(c),
+        child: Text(c.tr('Cancel')),
+      ),
+      FilledButton(onPressed: _save, child: Text(c.tr('Save'))),
+    ],
+  );
 }
