@@ -1,3 +1,4 @@
+import 'guided_document_store.dart';
 import 'local_file_store.dart';
 
 import 'package:cloud_functions/cloud_functions.dart';
@@ -159,6 +160,7 @@ class AuthService {
           options: HttpsCallableOptions(timeout: const Duration(seconds: 560)),
         );
     await deviceLocalFiles.clear(uid);
+    await guidedDrafts.clearOwner(uid);
     if (_auth.currentUser?.uid != uid) {
       throw FirebaseAuthException(code: 'user-mismatch');
     }

@@ -71,6 +71,7 @@ function fixture({ aiError = false, text = '## Steps\nSolution\nFINAL_ANSWER: 4'
     'node:crypto': { randomUUID: () => `request-${++nextId}` },
     'firebase-functions/params': { defineSecret: (name) => ({ name, value: () => 'offline-test-secret' }) },
     './luna_ai.cjs': { SafeLunaClient },
+    './document_details.cjs': require('../document_details.cjs'),
     './handwriting_backend.cjs': require('../handwriting_backend.cjs'),
     'firebase-admin/app': { initializeApp() {} },
     'firebase-admin/firestore': { getFirestore: () => db, FieldValue: { serverTimestamp: () => 'SERVER_TIMESTAMP' } },
@@ -296,4 +297,48 @@ test('Deleting an account during handwriting recognition prevents new Library co
   f=fixture({text:transcription('Notes'),beforeResponse:()=>f.records.set('account_deletions/student-1',{status:'deleting'})});
   await assert.rejects(f.recognizeHandwriting(handwritingRequest()),{code:'failed-precondition'});
   assert.equal(documents(f).length,0);
+});
+
+test('Guided preview consumes quota but does not create a Library document', async () => {
+  const f = fixture({text:'A reviewed draft'});
+  const result = await f.generateDocument(request('student-1', {previewOnly:true}));
+  assert.equal(result.previewOnly,true);
+  assert.equal(result.savedToLibrary,false);
+  assert.equal(result.documentId,null);
+  assert.equal(documents(f).length,0);
+  assert.equal(documentUsage(f).count,1);
+  assert.equal(result.remainingToday,9);
+  const reservation=[...f.records.entries()].find(([key])=>key.startsWith('document_usage/') && key.includes('/requests/'));
+  assert.equal(reservation[1].status,'completed');
+});
+test('Only a boolean preview flag permits the bounded longer guided brief', async () => {
+  for (const previewOnly of ['true',1,null]) {
+    const f=fixture();await assert.rejects(f.generateDocument(request('student-1',{previewOnly})),{code:'invalid-argument'});assert.equal(f.calls.length,0);
+  }
+  const f=fixture();await f.generateDocument(request('student-1',{previewOnly:true,instructions:'Known facts. '.repeat(300)}));
+  const old=fixture();await assert.rejects(old.generateDocument(request('student-1',{instructions:'x'.repeat(2001)})),{code:'invalid-argument'});
+  const tooLong=fixture();await assert.rejects(tooLong.generateDocument(request('student-1',{previewOnly:true,instructions:'x'.repeat(8001)})),{code:'invalid-argument'});
+});
+
+test('Extracted details are schema checked, count one request and create no document',async()=>{
+ const details={values:{name:'Rina',reason:'Ill'},education:[],experience:[]};
+ const f=fixture({text:JSON.stringify(details)});
+ const r=await f.generateDocument(request('student-1',{previewOnly:true,extractOnly:true}));
+ assert.deepEqual(JSON.parse(JSON.stringify(r.details)),details);assert.equal(r.document,undefined);
+ assert.equal(documents(f).length,0);assert.equal(documentUsage(f).count,1);assert.equal(r.remainingToday,9);
+ assert.match(f.calls[0].instructions,/Never guess the current year/);
+});
+test('Malformed and unsupported extracted data refunds quota and never saves a document',async()=>{
+ for(const text of ['bad JSON',JSON.stringify({values:{password:'no'},education:[],experience:[]}),JSON.stringify({values:{start:'2026-02-30'},education:[],experience:[]}),JSON.stringify({values:{name:'X'},education:['invented'],experience:[]})]){
+  const f=fixture({text});await assert.rejects(f.generateDocument(request('student-1',{previewOnly:true,extractOnly:true})));assert.equal(documentUsage(f).count,0);assert.equal(documents(f).length,0);
+ }
+});
+test('Extraction validates flags, document kind and input size before AI costs',async()=>{
+ for(const data of [{extractOnly:'true'},{extractOnly:true},{extractOnly:true,previewOnly:true,documentType:'Invoice'},{extractOnly:true,previewOnly:true,instructions:'x'.repeat(2001)},{extractOnly:true,previewOnly:true,instructions:null}]){
+  const f=fixture();await assert.rejects(f.generateDocument(request('student-1',data)),{code:'invalid-argument'});assert.equal(f.calls.length,0);
+ }
+});
+test('Deleting an account while extracting prevents completion and any document write',async()=>{
+ let f;f=fixture({text:JSON.stringify({values:{name:'Rina'},education:[],experience:[]}),beforeResponse:()=>f.records.set('account_deletions/student-1',{status:'deleting'})});
+ await assert.rejects(f.generateDocument(request('student-1',{previewOnly:true,extractOnly:true})),{code:'failed-precondition'});assert.equal(documents(f).length,0);
 });

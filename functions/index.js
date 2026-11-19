@@ -757,16 +757,18 @@ exports.generateDocument = onCall(
       throw new HttpsError("unauthenticated", "Please sign in to generate a document.");
     }
     if (!request.data || typeof request.data !== "object" || Array.isArray(request.data) ||
-        Object.keys(request.data).some((key) => !["title", "instructions", "documentType", "language", "expectedUid"].includes(key))) {
+        Object.keys(request.data).some((key) => !["title", "instructions", "documentType", "language", "expectedUid", "previewOnly", "extractOnly"].includes(key))) {
       throw new HttpsError("invalid-argument", "Provide only the supported document fields.");
     }
     if (request.data.expectedUid !== undefined && request.data.expectedUid !== request.auth.uid) {
       throw new HttpsError("failed-precondition", "The signed-in account changed. Please try again.", { reason: "account-changed" });
     }
-    const { title, instructions, documentType, language } = request.data;
+    const { title, instructions, documentType, language, previewOnly = false, extractOnly = false } = request.data;
     if (
+      typeof previewOnly !== "boolean" || typeof extractOnly !== "boolean" ||
+      (extractOnly && (!previewOnly || !["CV / Resume", "Job Application", "Leave Application", "Formal Letter", "Assignment"].includes(documentType) || typeof instructions !== "string" || instructions.length > 2000)) ||
       typeof title !== "string" || title.trim().length < 3 || title.length > 150 ||
-      typeof instructions !== "string" || instructions.trim().length < 10 || instructions.length > 2000 ||
+      typeof instructions !== "string" || instructions.trim().length < 10 || instructions.length > (previewOnly === true ? 8000 : 2000) ||
       typeof documentType !== "string" || !documentType.trim() || documentType.length > 100 ||
       !["Bangla", "English"].includes(language)
     ) {
@@ -795,7 +797,7 @@ exports.generateDocument = onCall(
           language,
           instructions: instructions.trim(),
         }),
-        instructions: `You are Jiggo, an AI document writing assistant.
+        instructions: extractOnly ? require('./document_details.cjs').extractionInstructions(normalizedType) : `You are Jiggo, an AI document writing assistant.
 Write only the requested document content in the requested language.
 Use clear Markdown headings, short paragraphs and simple lists.
 Avoid Markdown tables, HTML, code fences and horizontal rules so editing and PDF export stay readable.
@@ -812,9 +814,18 @@ ${guidance}`,
       if (typeof document !== "string" || !document.trim()) {
         throw new Error("Empty AI document");
       }
+      const details = extractOnly ? require('./document_details.cjs').parseDetails(normalizedType, document) : null;
       aiSucceeded = true;
       let savedToLibrary = false;
-      for (let attempt = 1; attempt <= 3; attempt++) {
+      if (previewOnly) {
+        await getFirestore().runTransaction(async transaction => {
+          await ensureAccountActive(transaction, uid);
+          const state = await transaction.get(reservation.requestRef);
+          if (!state.exists || state.data().status !== "reserved") throw new Error("Invalid preview reservation");
+          transaction.update(reservation.requestRef, {status: "completed", previewOnly: true, completedAt: FieldValue.serverTimestamp()});
+        });
+      }
+      for (let attempt = 1; !previewOnly && attempt <= 3; attempt++) {
         try {
           await saveGeneratedDocument(reservation, documentRef, {
             title: normalizedTitle,
@@ -830,10 +841,12 @@ ${guidance}`,
       }
       return {
         success: true,
-        document,
+        ...(extractOnly ? {details} : {document}),
+        extractOnly,
         title: normalizedTitle,
         documentType: normalizedType,
         language,
+        previewOnly,
         savedToLibrary,
         documentId: savedToLibrary ? requestId : null,
         dailyLimit: DOCUMENT_DAILY_LIMIT,
@@ -850,6 +863,7 @@ ${guidance}`,
           console.error("Document refund failed:", safeErrorCode(refundError));
         }
       }
+      if (extractOnly && error instanceof HttpsError) throw error;
       throw safeAiFailure(error);
     } finally {
       try {
