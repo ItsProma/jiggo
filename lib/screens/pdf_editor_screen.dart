@@ -1,3 +1,7 @@
+import 'pdf_markup_screen.dart';
+import '../services/pdf_markup_engine.dart';
+import '../services/image_edit_model.dart';
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -12,7 +16,14 @@ class PdfEditorScreen extends StatefulWidget {
   final PdfEditPicker? picker;
   final PdfEditEngine? engine;
   final PdfFileActions? files;
-  const PdfEditorScreen({super.key, this.picker, this.engine, this.files});
+  final PdfMarkupEngine? markup;
+  const PdfEditorScreen({
+    super.key,
+    this.picker,
+    this.engine,
+    this.files,
+    this.markup,
+  });
   @override
   State<PdfEditorScreen> createState() => _PdfEditorScreenState();
 }
@@ -20,11 +31,12 @@ class PdfEditorScreen extends StatefulWidget {
 class _PdfEditorScreenState extends State<PdfEditorScreen> {
   late final _picker = widget.picker ?? DevicePdfEditPicker();
   late final _engine = widget.engine ?? DevicePdfEditEngine();
+  late final _markupEngine = widget.markup ?? DevicePdfMarkupEngine();
   late final _files = widget.files ?? DevicePdfFileActions();
   final _sources = <PdfEditSource>[];
   final _plan = PdfPagePlan();
   final _title = TextEditingController();
-  int _selected = 0, _bytes = 0;
+  int _selected = 0, _bytes = 0, _externalSources = 0, _markupBytes = 0;
   bool _busy = false, _leaving = false, _asking = false;
   String? _notice;
   String _baseline = '', _baseTitle = '';
@@ -88,7 +100,9 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
     try {
       if (!append && !await _confirm()) return;
       if (!mounted) return;
-      if (append && _sources.length >= 10) throw const FormatException();
+      if (append && (_externalSources >= 10 || _sources.length >= 30)) {
+        throw const FormatException();
+      }
       final picked = blank ? null : await _picker.pick();
       if (!mounted || (!blank && picked == null)) return;
       picked?.validate();
@@ -110,6 +124,8 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
         if (!append) {
           _sources.clear();
           _bytes = 0;
+          _externalSources = 0;
+          _markupBytes = 0;
         }
         final id = _sources.length;
         _sources.add(candidate!);
@@ -130,6 +146,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
           _baseTitle = _title.text;
         }
         _bytes += inputBytes;
+        _externalSources++;
         _notice = 'Opened a local PDF copy. The original file is unchanged.';
       });
       candidate = null;
@@ -187,6 +204,62 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
     }
   }
 
+  Future<void> _markup() async {
+    if (_busy || !_hasPdf) return;
+    setState(() => _busy = true);
+    PdfEditSource? candidate;
+    try {
+      if (_sources.length >= 30 || _markupBytes >= 32 * 1024 * 1024) {
+        throw const FormatException();
+      }
+      final entry = _plan.pages[_selected];
+      final raster = await _markupEngine.raster(_sources[entry.source], entry);
+      if (!mounted) return;
+      setState(() => _asking = true);
+      final edited = await Navigator.push<EditedImage>(
+        context,
+        MaterialPageRoute(
+          builder: (_) => PdfMarkupScreen(background: raster.image),
+        ),
+      );
+      if (!mounted || edited == null) return;
+      setState(() => _asking = false);
+      final bytes = await _markupEngine.encode(
+        edited,
+        raster.widthPoints,
+        raster.heightPoints,
+      );
+      if (_markupBytes + bytes.length > 32 * 1024 * 1024) {
+        throw const FormatException();
+      }
+      candidate = await _engine.open(PickedEditPdf('marked-page.pdf', bytes));
+      if (!mounted) return;
+      if (candidate.pageCount != 1) throw const FormatException();
+      setState(() {
+        final id = _sources.length;
+        _sources.add(candidate!);
+        _plan.replace(_selected, EditPdfPage(id, 0));
+        _markupBytes += bytes.length;
+        _notice = 'Page markup applied. Save a new PDF copy to keep it.';
+      });
+      candidate = null;
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => _notice = 'Could not apply page markup. Your previous PDF is kept. Save your work and reopen a copy if the editor is full.',
+        );
+      }
+    } finally {
+      await candidate?.close();
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _asking = false;
+        });
+      }
+    }
+  }
+
   Future<void> _zoom() async {
     final page = _plan.pages[_selected];
     await showDialog<void>(
@@ -231,7 +304,7 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
                 children: [
                   Text(
                     context.tr(
-                      'Arrange PDF pages locally. Text, images and signatures cannot be edited in this step.',
+                      'Arrange PDF pages or add page markup. Existing PDF text and images cannot be changed directly.',
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -336,6 +409,11 @@ class _PdfEditorScreenState extends State<PdfEditorScreen> {
                       spacing: 8,
                       runSpacing: 8,
                       children: [
+                        FilledButton.icon(
+                          onPressed: _busy ? null : _markup,
+                          icon: const Icon(Icons.edit_note),
+                          label: Text(context.tr('Add page markup')),
+                        ),
                         OutlinedButton.icon(
                           onPressed: _busy
                               ? null

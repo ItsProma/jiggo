@@ -26,6 +26,62 @@ class AppStrings {
   }
 
   static const Map<String, String> bangla = {
+    'Resume editing': 'আবার সম্পাদনা করো',
+    'Tap Resume editing to place your item.':
+        'আইটেম বসাতে আবার সম্পাদনা করো বাটনে চাপ দাও।',
+
+    'Scroll page': 'পৃষ্ঠা স্ক্রল করো',
+    'Scroll mode is on. Choose a tool to edit the page.':
+        'স্ক্রল চালু আছে। পৃষ্ঠা সম্পাদনা করতে একটি টুল বেছে নাও।',
+
+    "Add page markup": "পৃষ্ঠায় মার্কআপ যোগ করো",
+    "Page markup": "পৃষ্ঠার মার্কআপ",
+    "Apply to page": "পৃষ্ঠায় প্রয়োগ করো",
+    "Applied markup turns this page into an image. Text on this page will not be selectable or searchable. Keep your original PDF.": "মার্কআপ প্রয়োগ করলে এই পৃষ্ঠা ছবিতে পরিণত হবে। এই পৃষ্ঠার লেখা select বা search করা যাবে না। মূল PDF রেখে দাও।",
+    "Arrange PDF pages or add page markup. Existing PDF text and images cannot be changed directly.": "PDF-এর পৃষ্ঠা সাজাও বা মার্কআপ যোগ করো। আগে থেকে থাকা লেখা ও ছবি সরাসরি বদলানো যাবে না।",
+    "Page markup applied. Save a new PDF copy to keep it.":
+        "পৃষ্ঠায় মার্কআপ প্রয়োগ হয়েছে। রাখতে চাইলে নতুন PDF কপি সেভ করো।",
+    "Could not apply page markup. Your previous PDF is kept. Save your work and reopen a copy if the editor is full.": "পৃষ্ঠায় মার্কআপ প্রয়োগ হয়নি। আগের PDF অক্ষত আছে। এডিটর পূর্ণ হলে কাজ সেভ করে কপি আবার খোলো।",
+    "Add PDF text": "PDF-এ লেখা যোগ করো",
+    "Write Bangla or English text": "বাংলা বা English লেখা লিখো",
+    "Next": "পরের ধাপ",
+    "Move item": "আইটেম সরাও",
+    "Add image": "ছবি যোগ করো",
+    "Highlight area": "জায়গা হাইলাইট করো",
+    "Draw": "আঁকো",
+    "Draw signature": "স্বাক্ষর আঁকো",
+    "Tap or drag on the page to place your item.":
+        "আইটেম বসাতে পৃষ্ঠায় চাপ দাও বা টেনে জায়গা বেছে নাও।",
+    "Cancel placement": "বসানো বাতিল করো",
+    "Select an item below, then drag on the page to move it.":
+        "নিচে আইটেম বেছে নিয়ে পৃষ্ঠায় টেনে সরাও।",
+    "Drag a rectangle over the area to highlight.":
+        "হাইলাইট করতে জায়গাটির ওপর আয়তক্ষেত্র টেনে আঁকো।",
+    "Draw your signature on the page. This is not a digital certificate.":
+        "পৃষ্ঠায় নিজের স্বাক্ষর আঁকো। এটি ডিজিটাল সার্টিফিকেট নয়।",
+    "Draw on the page with your finger or mouse.":
+        "আঙুল বা মাউস দিয়ে পৃষ্ঠায় আঁকো।",
+    "Select item": "আইটেম বেছে নাও",
+    "Color": "রং",
+    "Size": "আকার",
+    "Blue": "নীল",
+    "Red": "লাল",
+    "Green": "সবুজ",
+    "Yellow": "হলুদ",
+    "Discard page markup?": "পৃষ্ঠার মার্কআপ বাতিল করবে?",
+    "Apply to page to keep these changes, or discard them.":
+        "পরিবর্তন রাখতে পৃষ্ঠায় প্রয়োগ করো, অথবা বাতিল করো।",
+    "Unable to add this item. Use shorter text or fewer items.":
+        "আইটেম যোগ হয়নি। ছোট লেখা বা কম আইটেম ব্যবহার করো।",
+    "This text does not fit. Use fewer words or fewer lines.":
+        "এই লেখা জায়গায় ধরছে না। কম শব্দ বা কম লাইন দাও।",
+    "Use up to four images in one markup session.":
+        "একবার মার্কআপ করার সময় সর্বোচ্চ চারটি ছবি যোগ করা যাবে।",
+    "Could not add image. Choose a JPG or PNG under 15 MB.":
+        "ছবি যোগ হয়নি। ১৫ MB-এর কম JPG বা PNG বেছে নাও।",
+    "Could not apply markup. Your page changes are kept here.":
+        "মার্কআপ প্রয়োগ হয়নি। পৃষ্ঠার পরিবর্তনগুলো এখানে আছে।",
+
     "PDF Editor": "পিডিএফ এডিটর",
     "Open PDF": "PDF খোলো",
     "Add PDF / Merge": "PDF যোগ / একত্র করো",
@@ -40,17 +96,22 @@ class AppStrings {
     "Page order": "পৃষ্ঠার ক্রম",
     "Save PDF copy": "PDF কপি সেভ করো",
     "Leave this PDF?": "এই PDF থেকে বের হবে?",
-    "Save a new PDF copy before leaving. This draft is not saved in Library.": "বের হওয়ার আগে PDF-এর নতুন কপি সেভ করো। এই খসড়া লাইব্রেরিতে সেভ হয়নি।",
+    "Save a new PDF copy before leaving. This draft is not saved in Library.":
+        "বের হওয়ার আগে PDF-এর নতুন কপি সেভ করো। এই খসড়া লাইব্রেরিতে সেভ হয়নি।",
     "Arrange PDF pages locally. Text, images and signatures cannot be edited in this step.": "নিজের ডিভাইসে PDF-এর পৃষ্ঠা সাজাও। এই ধাপে লেখা, ছবি ও স্বাক্ষর পরিবর্তন করা যাবে না।",
     "Page copies may lose bookmarks, links between pages, forms and digital signatures. Keep your original.": "পৃষ্ঠার কপিতে বুকমার্ক, পৃষ্ঠার মধ্যকার লিংক, ফর্ম ও ডিজিটাল স্বাক্ষর হারাতে পারে। মূল ফাইল রেখে দাও।",
     "Page {number} of {count}": "মোট {count} পৃষ্ঠার মধ্যে {number}",
-    "Opened a local PDF copy. The original file is unchanged.": "ডিভাইসের PDF-এর কপি খোলা হয়েছে। মূল ফাইল বদলায়নি।",
+    "Opened a local PDF copy. The original file is unchanged.":
+        "ডিভাইসের PDF-এর কপি খোলা হয়েছে। মূল ফাইল বদলায়নি।",
     "Could not open this PDF. Use an unencrypted PDF under 10 MB, up to 100 total pages and 10 source files. Your current PDF is kept.": "PDF খোলা যায়নি। পাসওয়ার্ড ছাড়া ১০ MB-এর কম PDF দাও। সর্বোচ্চ মোট ১০০ পৃষ্ঠা ও ১০টি সোর্স ফাইল যোগ করা যাবে। বর্তমান PDF অক্ষত আছে।",
     "PDF copy saved.": "PDF কপি সেভ হয়েছে।",
-    "PDF download requested. Check Downloads before leaving.": "PDF ডাউনলোডের অনুরোধ করা হয়েছে। বের হওয়ার আগে Downloads দেখো।",
-    "PDF share sheet opened. Finish sharing before leaving.": "PDF শেয়ার করার অপশন খোলা হয়েছে। বের হওয়ার আগে শেয়ার সম্পন্ন করো।",
+    "PDF download requested. Check Downloads before leaving.":
+        "PDF ডাউনলোডের অনুরোধ করা হয়েছে। বের হওয়ার আগে Downloads দেখো।",
+    "PDF share sheet opened. Finish sharing before leaving.":
+        "PDF শেয়ার করার অপশন খোলা হয়েছে। বের হওয়ার আগে শেয়ার সম্পন্ন করো।",
     "Cancelled. Your PDF draft is kept.": "বাতিল হয়েছে। PDF খসড়া অক্ষত আছে।",
-    "Could not export PDF. Your draft is kept. Try a smaller PDF.": "PDF এক্সপোর্ট হয়নি। খসড়া অক্ষত আছে। ছোট PDF দিয়ে চেষ্টা করো।",
+    "Could not export PDF. Your draft is kept. Try a smaller PDF.":
+        "PDF এক্সপোর্ট হয়নি। খসড়া অক্ষত আছে। ছোট PDF দিয়ে চেষ্টা করো।",
     "Edit text locally and save a new TXT copy before closing or refreshing. Use Word DOCX or Image Editor for other files. Use PDF Editor to arrange PDF pages.": "ডিভাইসে লেখা সম্পাদনা করে বন্ধ বা রিফ্রেশ করার আগে নতুন TXT কপি সেভ করো। অন্য ফাইলের জন্য Word DOCX বা Image Editor ব্যবহার করো। PDF-এর পৃষ্ঠা সাজাতে PDF Editor খোলো।",
 
     "Home": "হোম",

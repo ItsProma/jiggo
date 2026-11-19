@@ -53,6 +53,12 @@ class PdfPagePlan {
   }
 
   void append(List<EditPdfPage> value) => _commit([..._pages, ...value]);
+  void replace(int at, EditPdfPage page) {
+    final next = List.of(_pages);
+    next[at] = page;
+    _commit(next);
+  }
+
   void rotate(int at) {
     final next = List.of(_pages);
     next[at] = next[at].rotated();
