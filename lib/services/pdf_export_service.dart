@@ -1,21 +1,17 @@
-
 import 'package:flutter/services.dart';
 import 'package:markdown/markdown.dart' as md;
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
+
 import 'bangla_pdf_paginator.dart';
 
 class PdfExportService {
-
   static bool _containsBangla(String text) {
     return RegExp(r'[\u0980-\u09FF]').hasMatch(text);
   }
 
-
-  static List<pw.TextSpan> _buildInlineSpans(
-    List<md.Node>? nodes,
-  ) {
+  static List<pw.TextSpan> _buildInlineSpans(List<md.Node>? nodes) {
     final spans = <pw.TextSpan>[];
 
     for (final node in nodes ?? <md.Node>[]) {
@@ -44,12 +40,23 @@ class PdfExportService {
     required String title,
     required String content,
   }) async {
-    final isBanglaDocument =
-    _containsBangla('$title\n$content');
-    
+    await Printing.sharePdf(
+      bytes: await buildDocument(title: title, content: content),
+      filename: 'jiggo_document.pdf',
+    );
+  }
+
+  static Future<Uint8List> buildDocument({
+    required String title,
+    required String content,
+    bool modern = false,
+  }) async {
+    final isBanglaDocument = _containsBangla('$title\n$content');
+
     if (isBanglaDocument) {
       final pages = await BanglaPdfPaginator.renderPages(
         content: '# $title\n\n$content',
+        modern: modern,
       );
 
       final banglaPdf = pw.Document();
@@ -63,21 +70,13 @@ class PdfExportService {
             margin: pw.EdgeInsets.zero,
             build: (context) => pw.FullPage(
               ignoreMargins: true,
-              child: pw.Image(
-                pageImage,
-                fit: pw.BoxFit.fill,
-              ),
+              child: pw.Image(pageImage, fit: pw.BoxFit.fill),
             ),
           ),
         );
       }
 
-      await Printing.sharePdf(
-        bytes: await banglaPdf.save(),
-        filename: 'jiggo_document.pdf',
-      );
-
-      return;
+      return banglaPdf.save();
     }
 
     final englishFontData = await rootBundle.load(
@@ -111,46 +110,46 @@ class PdfExportService {
       if (text.isEmpty) continue;
 
       if (RegExp(r'^h[1-6]$').hasMatch(tag) &&
-    text.toLowerCase() == title.trim().toLowerCase()) {
-  continue;
-}
+          text.toLowerCase() == title.trim().toLowerCase()) {
+        continue;
+      }
 
       if (RegExp(r'^h[1-6]$').hasMatch(tag)) {
         final level = int.parse(tag.substring(1));
 
         widgets.add(
           pw.Padding(
-            padding: const pw.EdgeInsets.only(
-              top: 12,
-              bottom: 8,
-            ),
+            padding: const pw.EdgeInsets.only(top: 12, bottom: 8),
             child: pw.Text(
               text,
               style: pw.TextStyle(
                 fontSize: level <= 2 ? 17 : 14,
+                color: modern ? PdfColor.fromHex('#4355C8') : PdfColors.black,
                 fontWeight: pw.FontWeight.bold,
               ),
             ),
           ),
         );
-      
-} else if (tag == 'p') {
-  widgets.add(
-    pw.Padding(
-      padding: const pw.EdgeInsets.only(bottom: 10),
-      child: pw.RichText(
-        text: pw.TextSpan(
-          style: const pw.TextStyle(
-            fontSize: 11,
-            lineSpacing: 4,
+      } else if (tag=='table') {
+        final rows=<List<String>>[];
+        void visit(md.Node n){if(n is md.Element){if(n.tag=='tr'){rows.add([for(final c in n.children??<md.Node>[])if(c is md.Element&&(c.tag=='th'||c.tag=='td'))c.textContent]);}else{for(final c in n.children??<md.Node>[]) {
+          visit(c);
+        }}}}
+        visit(node);
+        if(rows.isNotEmpty)widgets.add(pw.TableHelper.fromTextArray(headers:rows.first,data:rows.skip(1).toList(),headerStyle:pw.TextStyle(fontSize:9,fontWeight:pw.FontWeight.bold),cellStyle:const pw.TextStyle(fontSize:9),headerDecoration:const pw.BoxDecoration(color:PdfColors.grey200),border:pw.TableBorder.all(width:.5),cellPadding:const pw.EdgeInsets.all(5)));
+      } else if (tag == 'p') {
+        widgets.add(
+          pw.Padding(
+            padding: const pw.EdgeInsets.only(bottom: 10),
+            child: pw.RichText(
+              text: pw.TextSpan(
+                style: const pw.TextStyle(fontSize: 11, lineSpacing: 4),
+                children: _buildInlineSpans(node.children),
+              ),
+            ),
           ),
-          children: _buildInlineSpans(node.children),
-        ),
-      ),
-    ),
-  );
-}
- else if (tag == 'ul' || tag == 'ol') {
+        );
+      } else if (tag == 'ul' || tag == 'ol') {
         var number = 1;
 
         for (final child in node.children ?? <md.Node>[]) {
@@ -162,16 +161,10 @@ class PdfExportService {
 
           widgets.add(
             pw.Padding(
-              padding: const pw.EdgeInsets.only(
-                left: 12,
-                bottom: 6,
-              ),
+              padding: const pw.EdgeInsets.only(left: 12, bottom: 6),
               child: pw.Text(
                 '$prefix ${child.textContent.trim()}',
-                style: const pw.TextStyle(
-                  fontSize: 11,
-                  lineSpacing: 3,
-                ),
+                style: const pw.TextStyle(fontSize: 11, lineSpacing: 3),
               ),
             ),
           );
@@ -180,10 +173,7 @@ class PdfExportService {
         widgets.add(
           pw.Padding(
             padding: const pw.EdgeInsets.only(bottom: 8),
-            child: pw.Text(
-              text,
-              style: const pw.TextStyle(fontSize: 11),
-            ),
+            child: pw.Text(text, style: const pw.TextStyle(fontSize: 11)),
           ),
         );
       }
@@ -199,22 +189,20 @@ class PdfExportService {
         build: (context) => [
           pw.Text(
             title,
-            style: pw.TextStyle(
-              fontSize: 20,
-              fontWeight: pw.FontWeight.bold,
-            ),
+            style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold),
           ),
+          if (modern)
+            pw.Container(
+              height: 3,
+              color: PdfColor.fromHex('#4355C8'),
+              margin: const pw.EdgeInsets.only(top: 10),
+            ),
           pw.SizedBox(height: 20),
           ...widgets,
         ],
       ),
     );
 
-    final pdfBytes = await pdf.save();
-
-    await Printing.sharePdf(
-      bytes: pdfBytes,
-      filename: 'jiggo_document.pdf',
-    );
+    return pdf.save();
   }
 }

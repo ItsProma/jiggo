@@ -49,7 +49,7 @@ void main() {
       ),
     );
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
-    expect(find.text('Continue as Guest'), findsNothing);
+    expect(find.text('Explore as Guest'), findsNothing);
   });
 
   testWidgets('Shows login when no user is signed in', (tester) async {
@@ -62,7 +62,7 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('Jiggo'), findsOneWidget);
-    expect(find.text('Continue as Guest'), findsOneWidget);
+    expect(find.text('Explore as Guest'), findsOneWidget);
     expect(find.text('Continue with Google'), findsOneWidget);
     expect(find.text('What can I help you with?'), findsNothing);
     expect(tester.takeException(), isNull);
@@ -82,7 +82,7 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('Unable to check login status.'), findsOneWidget);
-    expect(find.text('Continue as Guest'), findsNothing);
+    expect(find.text('Explore as Guest'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 

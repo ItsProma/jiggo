@@ -1,3 +1,4 @@
+import 'auth_service.dart';
 import 'app_strings.dart';
 
 import 'package:cloud_functions/cloud_functions.dart';
@@ -56,6 +57,11 @@ class AiEligibilityService {
     if (uid == null) {
       return const AiEligibility(eligible: false);
     }
+    final user = FirebaseAuth.instance.currentUser;
+    if (!AuthService.isMember(user)) {
+      throw FirebaseAuthException(code: 'unauthenticated');
+    }
+    await user!.getIdToken(true);
     final result = await FirebaseFunctions.instanceFor(region: 'europe-west1')
         .httpsCallable(
           'getAiEligibility',
@@ -72,6 +78,11 @@ class AiEligibilityService {
     if (currentUid != uid) {
       throw FirebaseAuthException(code: 'user-mismatch');
     }
+    final user = FirebaseAuth.instance.currentUser;
+    if (!AuthService.isMember(user)) {
+      throw FirebaseAuthException(code: 'unauthenticated');
+    }
+    await user!.getIdToken(true);
     final result = await FirebaseFunctions.instanceFor(region: 'europe-west1')
         .httpsCallable(
           'setAiEligibility',
@@ -95,18 +106,38 @@ class AiEligibilityService {
     if (uid == null) {
       throw FirebaseAuthException(code: 'unauthenticated');
     }
-    final status = await load();
-    if (!context.mounted || currentUid != uid) {
-      return false;
+    AgeDeclaration? declaration;
+    while (context.mounted && currentUid == uid) {
+      try {
+        if (declaration != null) return await submit(declaration, uid);
+        final status = await load();
+        if (!context.mounted || currentUid != uid) return false;
+        if (status.eligible) return true;
+        declaration = await collect(context, ageBand: status.ageBand);
+        if (declaration == null || !declaration.eligible) return false;
+      } catch (error) {
+        if (!context.mounted || currentUid != uid) return false;
+        final retry = await showDialog<bool>(
+          context: context,
+          builder: (c) => AlertDialog(
+            title: Text(c.tr('Could not confirm your eligibility')),
+            content: Text(c.tr(errorMessage(error))),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(c, false),
+                child: Text(c.tr('Cancel')),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(c, true),
+                child: Text(c.tr('Retry')),
+              ),
+            ],
+          ),
+        );
+        if (retry != true) return false;
+      }
     }
-    if (status.eligible) {
-      return true;
-    }
-    final declaration = await collect(context, ageBand: status.ageBand);
-    if (declaration == null || !declaration.eligible) {
-      return false;
-    }
-    return submit(declaration, uid);
+    return false;
   }
 
   static String errorMessage(Object error) {
@@ -116,6 +147,22 @@ class AiEligibilityService {
       }
       if (error.code == 'not-found' || error.code == 'unimplemented') {
         return 'The AI eligibility service is not available yet. Please try again after the service is updated.';
+      }
+      if (error.code == 'permission-denied') {
+        if (error.details is Map &&
+            error.details['reason'] == 'email-verification') {
+          return 'Verify your email before using Jiggo tools.';
+        }
+        return 'App verification failed. Update Jiggo from Google Play, or reopen the website and try again.';
+      }
+      if (error.code == 'unavailable' || error.code == 'deadline-exceeded') {
+        return 'The eligibility service could not be reached. Check your connection and retry.';
+      }
+      if (error.code == 'invalid-argument') {
+        return 'The eligibility request was not accepted. Update Jiggo and try again.';
+      }
+      if (error.code == 'resource-exhausted') {
+        return 'Too many attempts. Wait a while and try again.';
       }
       if (error.code == 'unauthenticated') {
         return 'Sign-in or app verification failed. Reopen Jiggo and try again.';

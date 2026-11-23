@@ -67,7 +67,7 @@ function fixture({ aiError = false, text = '## Steps\nSolution\nFINAL_ANSWER: 4'
     }
   }
   const mocks = {
-    'firebase-functions/v2/https': { onCall: (options, handler) => Object.assign(handler, { options }), HttpsError },
+    'firebase-functions/v2/https': { onCall: (options, handler) => Object.assign(request => { if (request.auth && !Object.hasOwn(request.auth, 'token')) request = {...request, auth: {...request.auth, token: {firebase: {sign_in_provider: 'google.com'}}}}; return handler(request); }, {options}), HttpsError },
     'node:crypto': { randomUUID: () => `request-${++nextId}` },
     'firebase-functions/params': { defineSecret: (name) => ({ name, value: () => 'offline-test-secret' }) },
     './luna_ai.cjs': { SafeLunaClient },
@@ -268,7 +268,7 @@ function accountFixture({ guest = false, failDeleteKey = null, failAuthDelete = 
   };
   class HttpsError extends Error { constructor(code, message) { super(message); this.code = code; } }
   const mocks = {
-    'firebase-functions/v2/https': { onCall: (options, handler) => Object.assign(handler, { options }), HttpsError },
+    'firebase-functions/v2/https': { onCall: (options, handler) => Object.assign(request => { if (request.auth && !Object.hasOwn(request.auth, 'token')) request = {...request, auth: {...request.auth, token: {firebase: {sign_in_provider: 'google.com'}}}}; return handler(request); }, {options}), HttpsError },
     'node:crypto': { randomUUID: () => `job-${++nextId}` },
     'firebase-functions/params': { defineSecret: (name) => ({ name, value: () => 'offline-test-secret' }) },
     './luna_ai.cjs': { SafeLunaClient: class {} },
@@ -785,4 +785,19 @@ test('A blocked paid response preserves usage metadata but refunds successful-us
   assert.equal(usage(f).count, 0);
   const attempts = [...f.records.entries()].find(([key]) => key.startsWith('ai_attempts/'))[1];
   assert.equal(attempts.count, 1); assert.equal(attempts.reportedTotalTokens, 20);
+});
+
+for (const provider of ['anonymous','custom',null]) test(`Member guard rejects ${provider} before eligibility, AI or database access`, async () => {
+  const f = fixture();
+  const auth = {uid: 'student-1', token: {firebase: {sign_in_provider: provider}}};
+  await assert.rejects(f.solveQuestion({...f.request(),auth}), {code:'unauthenticated'});
+  await assert.rejects(f.generateDocument({auth,data:{}}), {code:'unauthenticated'});
+  await assert.rejects(f.getAiEligibility({auth,data:{expectedUid:auth.uid}}), {code:'unauthenticated'});
+  await assert.rejects(f.aiChat({auth,data:{action:'list'}}), {code:'unauthenticated'});
+  assert.equal(f.calls.length,0); assert.equal(f.records.size,0);
+});
+test('Unverified password account is rejected with an actionable reason', async () => {
+  const f=fixture(),auth={uid:'student-1',token:{firebase:{sign_in_provider:'password'},email_verified:false}};
+  await assert.rejects(f.solveQuestion({...f.request(),auth}), e=>e.code==='permission-denied'&&e.details.reason==='email-verification');
+  assert.equal(f.calls.length,0);assert.equal(f.records.size,0);
 });

@@ -1,19 +1,18 @@
 import '../services/app_theme.dart';
 import '../services/app_strings.dart';
 
-import 'dart:async' as async_utils;
+import 'email_auth_screen.dart';
+import 'guest_explore_screen.dart';
 
-import '../services/ai_eligibility_service.dart';
-import '../services/ads_service.dart';
 import 'privacy_screen.dart';
 
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../services/auth_service.dart';
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+  final bool showGuest;
+  const LoginScreen({super.key, this.showGuest = true});
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -22,82 +21,25 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final AuthService _authService = AuthService();
   bool _isLoading = false;
+  String? _error;
 
-  Future<void> _guestLogin() async {
-    if (_isLoading) return;
-
-    setState(() => _isLoading = true);
-
-    try {
-      final declaration = await AiEligibilityService.collect(context);
-      if (declaration == null) {
-        return;
-      }
-      final credential = await _authService.signInAsGuest();
-      final uid = credential.user?.uid;
-      if (uid != null) {
-        await AiEligibilityService.submit(declaration, uid);
-        async_utils.unawaited(
-          AdsService.instance.start(afterDeclaration: true),
-        );
-      }
-    } on FirebaseAuthException catch (error) {
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.tr(AuthService.errorMessage(error)))),
-      );
-    } catch (error) {
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(context.tr(AiEligibilityService.errorMessage(error))),
-        ),
-      );
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
-    }
+  void _guestLogin() {
+    Navigator.push<void>(
+      context,
+      MaterialPageRoute(builder: (_) => const GuestExploreScreen()),
+    );
   }
 
   Future<void> _googleLogin() async {
     if (_isLoading) return;
-
     setState(() => _isLoading = true);
-
     try {
-      final declaration = await AiEligibilityService.collect(context);
-      if (declaration == null) {
-        return;
-      }
-      final credential = await _authService.signInWithGoogle();
-      final uid = credential.user?.uid;
-      if (uid != null) {
-        await AiEligibilityService.submit(declaration, uid);
-        async_utils.unawaited(
-          AdsService.instance.start(afterDeclaration: true),
-        );
-      }
-    } on FirebaseAuthException catch (error) {
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.tr(AuthService.errorMessage(error)))),
-      );
+      await _authService.signInWithGoogle();
+      if (mounted) Navigator.of(context).popUntil((r) => r.isFirst);
     } catch (error) {
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(context.tr(AiEligibilityService.errorMessage(error))),
-        ),
-      );
+      if (mounted) setState(() => _error = AuthService.errorMessage(error));
     } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -143,7 +85,10 @@ class _LoginScreenState extends State<LoginScreen> {
                   const SizedBox(height: 40),
                   Text(
                     context.tr('Welcome to Jiggo'),
-                    style: const TextStyle(fontSize: 25, fontWeight: FontWeight.bold),
+                    style: const TextStyle(
+                      fontSize: 25,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                   const SizedBox(height: 10),
                   Text(
@@ -154,19 +99,20 @@ class _LoginScreenState extends State<LoginScreen> {
                     style: TextStyle(color: context.mutedColor),
                   ),
                   const SizedBox(height: 30),
-                  SizedBox(
-                    width: double.infinity,
+                  if (widget.showGuest)
+                    SizedBox(
+                      width: double.infinity,
 
-                    child: FilledButton.icon(
-                      onPressed: _isLoading ? null : _guestLogin,
-                      icon: const Icon(Icons.person_outline),
-                      label: Text(
-                        context.tr(
-                          _isLoading ? 'Please wait...' : 'Continue as Guest',
+                      child: FilledButton.icon(
+                        onPressed: _isLoading ? null : _guestLogin,
+                        icon: const Icon(Icons.person_outline),
+                        label: Text(
+                          context.tr(
+                            _isLoading ? 'Please wait...' : 'Explore as Guest',
+                          ),
                         ),
                       ),
                     ),
-                  ),
 
                   const SizedBox(height: 14),
                   SizedBox(
@@ -179,11 +125,37 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
 
+                  const SizedBox(height: 14),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      onPressed: _isLoading
+                          ? null
+                          : () => Navigator.push<void>(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const EmailAuthScreen(),
+                              ),
+                            ),
+                      icon: const Icon(Icons.mail_outline),
+                      label: Text(context.tr('Continue with email')),
+                    ),
+                  ),
+                  if (_error != null) ...[
+                    const SizedBox(height: 12),
+                    Text(context.tr(_error!)),
+                    TextButton(
+                      onPressed: _isLoading ? null : _googleLogin,
+                      child: Text(context.tr('Retry')),
+                    ),
+                  ],
                   const SizedBox(height: 24),
                   TextButton(
                     onPressed: () => Navigator.push<void>(
                       context,
-                      MaterialPageRoute<void>(builder: (_) => const PrivacyScreen()),
+                      MaterialPageRoute<void>(
+                        builder: (_) => const PrivacyScreen(),
+                      ),
                     ),
                     child: Text(context.tr('Privacy Policy')),
                   ),

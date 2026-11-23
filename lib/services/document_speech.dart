@@ -14,9 +14,45 @@ abstract class DocumentSpeech {
   Future<void> cancel();
 }
 
+String speechFailureMessage(String code) {
+  final value = code.toLowerCase().replaceAll('_', '-');
+  if (value.contains('not-allowed') ||
+      value.contains('permission') ||
+      value.contains('denied')) {
+    return 'Microphone permission is blocked. Allow microphone access in app or site settings, then retry.';
+  }
+  if (value.contains('network') || value.contains('server')) {
+    return 'The speech service could not connect. Check your connection and retry.';
+  }
+  if (value.contains('no-match') ||
+      value.contains('no-speech') ||
+      value.contains('speech-timeout')) {
+    return 'No speech was recognised. Tap Retry and speak clearly near the microphone.';
+  }
+  if (value.contains('audio-capture') || value.contains('audio-error')) {
+    return 'No microphone is available. Check your microphone and close other recording apps.';
+  }
+  if (value.contains('language')) {
+    return 'This speech language is unavailable on this device. Try another language or type instead.';
+  }
+  if (value.contains('busy') || value.contains('in-progress')) {
+    return 'The microphone is busy. Stop other recording apps and retry.';
+  }
+  if (value.contains('not-supported') || value.contains('unavailable')) {
+    return 'Speech recognition is unavailable here. Try Chrome or enable the speech service in device settings. You can still type.';
+  }
+  return 'Speech could not be recognised. Check microphone permission and your connection, then try again or type.';
+}
+
+abstract interface class SpeechFailureInfo {
+  String? get lastFailure;
+}
+
 /// One recognizer for the application. The plugin keeps initialization callbacks
 /// for its lifetime; callbacks here always point to the current dialog session.
-class DeviceDocumentSpeech implements DocumentSpeech {
+class DeviceDocumentSpeech implements DocumentSpeech, SpeechFailureInfo {
+  @override
+  String? lastFailure;
   static final instance = DeviceDocumentSpeech._();
   DeviceDocumentSpeech._();
   final _speech = SpeechToText();
@@ -30,10 +66,14 @@ class DeviceDocumentSpeech implements DocumentSpeech {
 
   Future<bool> _initialize() async {
     try {
+      lastFailure = null;
       final ready = await _speech.initialize(
         options: [SpeechToText.androidNoBluetooth],
         onStatus: (status) => _onListening?.call(status == 'listening'),
-        onError: (_) => _onError?.call(),
+        onError: (error) {
+          lastFailure = speechFailureMessage(error.errorMsg);
+          _onError?.call();
+        },
       );
       if (!ready) _initializing = null;
       return ready;
@@ -57,7 +97,12 @@ class DeviceDocumentSpeech implements DocumentSpeech {
     required void Function(bool listening) onListening,
     required void Function() onError,
   }) async {
+    // Clear a completed/failed previous recognizer before opening a new session.
+    _onListening = null;
+    _onError = null;
+    await _speech.cancel();
     final session = ++_session;
+    lastFailure = null;
     _onListening = onListening;
     _onError = onError;
     await _speech.listen(
@@ -73,7 +118,9 @@ class DeviceDocumentSpeech implements DocumentSpeech {
         pauseFor: const Duration(seconds: 8),
       ),
     );
-    if (session == _session) onListening(_speech.isListening);
+    // On the web, onstart arrives asynchronously; isListening may still be false.
+    // The recognizer status callback owns the listening state.
+    if (session == _session && _speech.isListening) onListening(true);
   }
 
   @override

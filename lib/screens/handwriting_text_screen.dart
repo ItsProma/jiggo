@@ -1,3 +1,5 @@
+import '../widgets/guarded_page_exit.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -24,7 +26,8 @@ class HandwritingTextScreen extends StatefulWidget {
   State<HandwritingTextScreen> createState() => _HandwritingTextScreenState();
 }
 
-class _HandwritingTextScreenState extends State<HandwritingTextScreen> {
+class _HandwritingTextScreenState extends State<HandwritingTextScreen>
+    with GuardedPageExit<HandwritingTextScreen> {
   late final _title = TextEditingController(text: widget.title);
   late final _text = TextEditingController(text: widget.text);
   late final HandwritingGateway _gateway;
@@ -150,100 +153,103 @@ class _HandwritingTextScreenState extends State<HandwritingTextScreen> {
       );
       if (!mounted || leave != true) return;
     }
-    if (mounted) Navigator.pop(context);
+    if (mounted) await finishPageExit();
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(
-      leading: BackButton(onPressed: _close),
-      title: Text(context.tr('Handwriting text')),
-    ),
-    body: SafeArea(
-      child: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          Text(
-            context.tr(
-              'Review every line. AI can misread handwriting. [unclear] marks text it could not read.',
-            ),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            context.tr(
-              widget.documentId == null
-                  ? 'Library saving was not confirmed. Copy or download this text before leaving.'
-                  : 'This note is saved in Library. Save changes after editing.',
-            ),
-          ),
-          const SizedBox(height: 16),
-          TextField(
-            key: const ValueKey('handwriting-title'),
-            controller: _title,
-            enabled: !_busy,
-            maxLength: 150,
-            maxLengthEnforcement: MaxLengthEnforcement.none,
-            decoration: InputDecoration(labelText: context.tr('Note title')),
-            onChanged: (_) => setState(() => _notice = null),
-          ),
-          TextField(
-            key: const ValueKey('handwriting-text'),
-            controller: _text,
-            enabled: !_busy,
-            minLines: 10,
-            maxLines: 24,
-            maxLength: 20000,
-            maxLengthEnforcement: MaxLengthEnforcement.none,
-            buildCounter: (
-              context, {
-              required currentLength,
-              required isFocused,
-              maxLength,
-            }) => Text('${_text.text.length}/20000'),
-            decoration: InputDecoration(
-              labelText: context.tr('Recognized text'),
-              alignLabelWithHint: true,
-              border: const OutlineInputBorder(),
-            ),
-            onChanged: (_) => setState(() => _notice = null),
-          ),
-          if (_busy) const LinearProgressIndicator(),
-          if (_notice != null)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              child: Text(context.tr(_notice!)),
-            ),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              FilledButton(
-                key: const ValueKey('handwriting-save'),
-                onPressed: _busy || !_dirty || widget.documentId == null
-                    ? null
-                    : _save,
-                child: Text(context.tr('Save changes')),
+  Widget build(BuildContext context) => guardPageExit(
+    Scaffold(
+      appBar: AppBar(
+        leading: BackButton(onPressed: () => guardedBack(_close)),
+        title: Text(context.tr('Handwriting text')),
+      ),
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            Text(
+              context.tr(
+                'Review every line. AI can misread handwriting. [unclear] marks text it could not read.',
               ),
-              OutlinedButton(
-                key: const ValueKey('handwriting-copy'),
-                onPressed: _busy ? null : _copy,
-                child: Text(context.tr('Copy')),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              context.tr(
+                widget.documentId == null
+                    ? 'Library saving was not confirmed. Copy or download this text before leaving.'
+                    : 'This note is saved in Library. Save changes after editing.',
               ),
-              OutlinedButton(
-                key: const ValueKey('handwriting-download'),
-                onPressed: _busy ? null : () => _export(false),
-                child: Text(context.tr('Save TXT')),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              key: const ValueKey('handwriting-title'),
+              controller: _title,
+              enabled: !_busy,
+              maxLength: 150,
+              maxLengthEnforcement: MaxLengthEnforcement.none,
+              decoration: InputDecoration(labelText: context.tr('Note title')),
+              onChanged: (_) => setState(() => _notice = null),
+            ),
+            TextField(
+              key: const ValueKey('handwriting-text'),
+              controller: _text,
+              enabled: !_busy,
+              minLines: 10,
+              maxLines: 24,
+              maxLength: 20000,
+              maxLengthEnforcement: MaxLengthEnforcement.none,
+              buildCounter: (
+                context, {
+                required currentLength,
+                required isFocused,
+                maxLength,
+              }) => Text('${_text.text.length}/20000'),
+              decoration: InputDecoration(
+                labelText: context.tr('Recognized text'),
+                alignLabelWithHint: true,
+                border: const OutlineInputBorder(),
               ),
-              OutlinedButton(
-                key: const ValueKey('handwriting-share'),
-                onPressed: _busy ? null : () => _export(true),
-                child: Text(context.tr('Share text')),
+              onChanged: (_) => setState(() => _notice = null),
+            ),
+            if (_busy) const LinearProgressIndicator(),
+            if (_notice != null)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                child: Text(context.tr(_notice!)),
               ),
-            ],
-          ),
-          AiReportButton(source: 'scan', content: _text.text),
-        ],
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                FilledButton(
+                  key: const ValueKey('handwriting-save'),
+                  onPressed: _busy || !_dirty || widget.documentId == null
+                      ? null
+                      : _save,
+                  child: Text(context.tr('Save changes')),
+                ),
+                OutlinedButton(
+                  key: const ValueKey('handwriting-copy'),
+                  onPressed: _busy ? null : _copy,
+                  child: Text(context.tr('Copy')),
+                ),
+                OutlinedButton(
+                  key: const ValueKey('handwriting-download'),
+                  onPressed: _busy ? null : () => _export(false),
+                  child: Text(context.tr('Save TXT')),
+                ),
+                OutlinedButton(
+                  key: const ValueKey('handwriting-share'),
+                  onPressed: _busy ? null : () => _export(true),
+                  child: Text(context.tr('Share text')),
+                ),
+              ],
+            ),
+            AiReportButton(source: 'scan', content: _text.text),
+          ],
+        ),
       ),
     ),
+    _close,
   );
 }

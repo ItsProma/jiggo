@@ -1,3 +1,4 @@
+import '../widgets/guarded_page_exit.dart';
 import '../services/local_file_saver.dart';
 import '../services/local_file_model.dart';
 
@@ -29,7 +30,8 @@ class DocxEditorScreen extends StatefulWidget {
   State<DocxEditorScreen> createState() => _DocxEditorScreenState();
 }
 
-class _DocxEditorScreenState extends State<DocxEditorScreen> {
+class _DocxEditorScreenState extends State<DocxEditorScreen>
+    with GuardedPageExit<DocxEditorScreen> {
   late QuillController _controller;
   final _title = TextEditingController(text: 'My document');
   late final _files = widget.files ?? DeviceDocxFiles();
@@ -283,192 +285,197 @@ class _DocxEditorScreenState extends State<DocxEditorScreen> {
 
   Future<void> _close() async {
     if (_busy || !await _confirm() || !mounted) return;
-    Navigator.pop(context);
+    await finishPageExit();
   }
 
   @override
   Widget build(BuildContext context) {
     final attrs = _controller.getSelectionStyle().attributes;
     final heading = attrs['header']?.value as int? ?? 0;
-    return Scaffold(
-      appBar: AppBar(
-        leading: BackButton(onPressed: _close),
-        title: Text(context.tr('Word DOCX')),
-      ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(context.tr('Basic DOCX copy editor')),
-              const SizedBox(height: 8),
-              Text(
-                context.tr(
-                  'Keeps text, Bold, Italic, Heading 1–3 and single-level lists. Fonts, colors and page layout are normalized. Lists restart from 1. Save a new copy before closing or refreshing.',
+    return guardPageExit(
+      Scaffold(
+        appBar: AppBar(
+          leading: BackButton(onPressed: () => guardedBack(_close)),
+          title: Text(context.tr('Word DOCX')),
+        ),
+        body: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(context.tr('Basic DOCX copy editor')),
+                const SizedBox(height: 8),
+                Text(
+                  context.tr(
+                    'Keeps text, Bold, Italic, Heading 1–3 and single-level lists. Fonts, colors and page layout are normalized. Lists restart from 1. Save a new copy before closing or refreshing.',
+                  ),
                 ),
-              ),
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  FilledButton.icon(
-                    onPressed: _busy ? null : () => _open(),
-                    icon: const Icon(Icons.folder_open),
-                    label: Text(context.tr('Open DOCX')),
-                  ),
-                  OutlinedButton(
-                    onPressed: _busy ? null : () => _open(blank: true),
-                    child: Text(context.tr('New document')),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                key: const ValueKey('docx-title'),
-                controller: _title,
-                enabled: !_busy,
-                maxLength: 140,
-                maxLengthEnforcement: MaxLengthEnforcement.none,
-                decoration: InputDecoration(
-                  labelText: context.tr('File title'),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    FilledButton.icon(
+                      onPressed: _busy ? null : () => _open(),
+                      icon: const Icon(Icons.folder_open),
+                      label: Text(context.tr('Open DOCX')),
+                    ),
+                    OutlinedButton(
+                      onPressed: _busy ? null : () => _open(blank: true),
+                      child: Text(context.tr('New document')),
+                    ),
+                  ],
                 ),
-                onChanged: (_) => setState(() {}),
-              ),
-              Wrap(
-                spacing: 4,
-                runSpacing: 4,
-                children: [
-                  IconButton(
-                    tooltip: context.tr('Bold'),
-                    isSelected: attrs['bold']?.value == true,
-                    onPressed: _busy ? null : () => _inline(Attribute.bold),
-                    icon: const Icon(Icons.format_bold),
+                const SizedBox(height: 12),
+                TextField(
+                  key: const ValueKey('docx-title'),
+                  controller: _title,
+                  enabled: !_busy,
+                  maxLength: 140,
+                  maxLengthEnforcement: MaxLengthEnforcement.none,
+                  decoration: InputDecoration(
+                    labelText: context.tr('File title'),
                   ),
-                  IconButton(
-                    tooltip: context.tr('Italic'),
-                    isSelected: attrs['italic']?.value == true,
-                    onPressed: _busy ? null : () => _inline(Attribute.italic),
-                    icon: const Icon(Icons.format_italic),
-                  ),
-                  IconButton(
-                    tooltip: context.tr('Bullet list'),
-                    isSelected: attrs['list']?.value == 'bullet',
-                    onPressed: _busy
-                        ? null
-                        : () => _block(
-                            'list',
-                            attrs['list']?.value == 'bullet' ? null : 'bullet',
-                          ),
-                    icon: const Icon(Icons.format_list_bulleted),
-                  ),
-                  IconButton(
-                    tooltip: context.tr('Numbered list'),
-                    isSelected: attrs['list']?.value == 'ordered',
-                    onPressed: _busy
-                        ? null
-                        : () => _block(
-                            'list',
-                            attrs['list']?.value == 'ordered'
-                                ? null
-                                : 'ordered',
-                          ),
-                    icon: const Icon(Icons.format_list_numbered),
-                  ),
-                  IconButton(
-                    tooltip: context.tr('Undo'),
-                    onPressed: !_busy && _controller.hasUndo
-                        ? _controller.undo
-                        : null,
-                    icon: const Icon(Icons.undo),
-                  ),
-                  IconButton(
-                    tooltip: context.tr('Redo'),
-                    onPressed: !_busy && _controller.hasRedo
-                        ? _controller.redo
-                        : null,
-                    icon: const Icon(Icons.redo),
-                  ),
-                ],
-              ),
-              DropdownButtonFormField<int>(
-                key: ValueKey('docx-heading-$_generation-$heading'),
-                initialValue: heading,
-                isExpanded: true,
-                decoration: InputDecoration(
-                  labelText: context.tr('Paragraph style'),
+                  onChanged: (_) => setState(() {}),
                 ),
-                items: [
-                  for (var i = 0; i <= 3; i++)
-                    DropdownMenuItem(
-                      value: i,
-                      child: Text(
-                        context.tr(i == 0 ? 'Normal text' : 'Heading $i'),
+                Wrap(
+                  spacing: 4,
+                  runSpacing: 4,
+                  children: [
+                    IconButton(
+                      tooltip: context.tr('Bold'),
+                      isSelected: attrs['bold']?.value == true,
+                      onPressed: _busy ? null : () => _inline(Attribute.bold),
+                      icon: const Icon(Icons.format_bold),
+                    ),
+                    IconButton(
+                      tooltip: context.tr('Italic'),
+                      isSelected: attrs['italic']?.value == true,
+                      onPressed: _busy ? null : () => _inline(Attribute.italic),
+                      icon: const Icon(Icons.format_italic),
+                    ),
+                    IconButton(
+                      tooltip: context.tr('Bullet list'),
+                      isSelected: attrs['list']?.value == 'bullet',
+                      onPressed: _busy
+                          ? null
+                          : () => _block(
+                              'list',
+                              attrs['list']?.value == 'bullet'
+                                  ? null
+                                  : 'bullet',
+                            ),
+                      icon: const Icon(Icons.format_list_bulleted),
+                    ),
+                    IconButton(
+                      tooltip: context.tr('Numbered list'),
+                      isSelected: attrs['list']?.value == 'ordered',
+                      onPressed: _busy
+                          ? null
+                          : () => _block(
+                              'list',
+                              attrs['list']?.value == 'ordered'
+                                  ? null
+                                  : 'ordered',
+                            ),
+                      icon: const Icon(Icons.format_list_numbered),
+                    ),
+                    IconButton(
+                      tooltip: context.tr('Undo'),
+                      onPressed: !_busy && _controller.hasUndo
+                          ? _controller.undo
+                          : null,
+                      icon: const Icon(Icons.undo),
+                    ),
+                    IconButton(
+                      tooltip: context.tr('Redo'),
+                      onPressed: !_busy && _controller.hasRedo
+                          ? _controller.redo
+                          : null,
+                      icon: const Icon(Icons.redo),
+                    ),
+                  ],
+                ),
+                DropdownButtonFormField<int>(
+                  key: ValueKey('docx-heading-$_generation-$heading'),
+                  initialValue: heading,
+                  isExpanded: true,
+                  decoration: InputDecoration(
+                    labelText: context.tr('Paragraph style'),
+                  ),
+                  items: [
+                    for (var i = 0; i <= 3; i++)
+                      DropdownMenuItem(
+                        value: i,
+                        child: Text(
+                          context.tr(i == 0 ? 'Normal text' : 'Heading $i'),
+                        ),
+                      ),
+                  ],
+                  onChanged: _busy
+                      ? null
+                      : (v) => _block('header', v == 0 ? null : v),
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  constraints: const BoxConstraints(minHeight: 300),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Theme.of(context).dividerColor),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: QuillEditor.basic(
+                    key: ValueKey('docx-editor-$_generation'),
+                    controller: _controller,
+                    config: QuillEditorConfig(
+                      scrollable: false,
+                      placeholder: context.tr(
+                        'Write or paste your document text here.',
                       ),
                     ),
-                ],
-                onChanged: _busy
-                    ? null
-                    : (v) => _block('header', v == 0 ? null : v),
-              ),
-              const SizedBox(height: 12),
-              Container(
-                constraints: const BoxConstraints(minHeight: 300),
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  border: Border.all(color: Theme.of(context).dividerColor),
-                  borderRadius: BorderRadius.circular(8),
+                  ),
                 ),
-                child: QuillEditor.basic(
-                  key: ValueKey('docx-editor-$_generation'),
-                  controller: _controller,
-                  config: QuillEditorConfig(
-                    scrollable: false,
-                    placeholder: context.tr(
-                      'Write or paste your document text here.',
+                Text('${_controller.document.length}/${DocxCodec.maxText}'),
+                if (_busy) const LinearProgressIndicator(),
+                if (_notice != null)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    child: Text(context.tr(_notice!)),
+                  ),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    OutlinedButton.icon(
+                      key: const ValueKey('local-library-save'),
+                      onPressed: _busy
+                          ? null
+                          : () => _export(false, library: true),
+                      icon: const Icon(Icons.library_add_outlined),
+                      label: Text(context.tr('Save to Library')),
                     ),
-                  ),
+                    FilledButton(
+                      onPressed: _busy ? null : () => _export(false),
+                      child: Text(context.tr('Save DOCX copy')),
+                    ),
+                    OutlinedButton(
+                      onPressed: _busy ? null : () => _export(true),
+                      child: Text(context.tr('Share DOCX')),
+                    ),
+                    OutlinedButton(
+                      onPressed: _busy ? null : _copy,
+                      child: Text(context.tr('Copy text')),
+                    ),
+                  ],
                 ),
-              ),
-              Text('${_controller.document.length}/${DocxCodec.maxText}'),
-              if (_busy) const LinearProgressIndicator(),
-              if (_notice != null)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  child: Text(context.tr(_notice!)),
-                ),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  OutlinedButton.icon(
-                    key: const ValueKey('local-library-save'),
-                    onPressed: _busy
-                        ? null
-                        : () => _export(false, library: true),
-                    icon: const Icon(Icons.library_add_outlined),
-                    label: Text(context.tr('Save to Library')),
-                  ),
-                  FilledButton(
-                    onPressed: _busy ? null : () => _export(false),
-                    child: Text(context.tr('Save DOCX copy')),
-                  ),
-                  OutlinedButton(
-                    onPressed: _busy ? null : () => _export(true),
-                    child: Text(context.tr('Share DOCX')),
-                  ),
-                  OutlinedButton(
-                    onPressed: _busy ? null : _copy,
-                    child: Text(context.tr('Copy text')),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 24),
-            ],
+                const SizedBox(height: 24),
+              ],
+            ),
           ),
         ),
       ),
+      _close,
     );
   }
 }

@@ -76,7 +76,7 @@ function fixture() {
     }
   }
   const mocks = {
-    'firebase-functions/v2/https': { HttpsError, onCall: (options, handler) => Object.assign(handler, {options}) },
+    'firebase-functions/v2/https': { HttpsError, onCall: (options, handler) => Object.assign(request => { if (request.auth && !Object.hasOwn(request.auth, 'token')) request = {...request, auth: {...request.auth, token: {firebase: {sign_in_provider: 'google.com'}}}}; return handler(request); }, {options}) },
     'firebase-functions/params': { defineSecret: name => ({name, value: () => 'mock-server-key'}) },
     'node:crypto': require('node:crypto'),
     './luna_ai.cjs': { SafeLunaClient },

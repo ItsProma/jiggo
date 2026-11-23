@@ -12,6 +12,7 @@ class LocalFilesPanel extends StatefulWidget {
   final LibrarySort sort;
   final LocalFileStore? store;
   final bool compact;
+  final bool embedded, showEmpty;
   final VoidCallback? onViewAll;
   final String? Function()? currentOwner;
   const LocalFilesPanel({
@@ -21,6 +22,8 @@ class LocalFilesPanel extends StatefulWidget {
     this.search = '',
     this.sort = LibrarySort.newest,
     this.compact = false,
+    this.embedded = false,
+    this.showEmpty = true,
     this.onViewAll,
     this.currentOwner,
   });
@@ -248,6 +251,7 @@ class _LocalFilesPanelState extends State<LocalFilesPanel> {
         child: LinearProgressIndicator(),
       );
     } else if (files.isEmpty) {
+      if (!widget.showEmpty) return const SizedBox.shrink();
       status = Padding(
         padding: const EdgeInsets.all(12),
         child: Text(
@@ -259,7 +263,9 @@ class _LocalFilesPanelState extends State<LocalFilesPanel> {
         ),
       );
     } else {
-      status = widget.compact
+      status = widget.embedded
+          ? Column(children: files.map(_tile).toList())
+          : widget.compact
           ? Column(children: files.take(3).map(_tile).toList())
           : ListView.builder(
               itemCount: files.length,
@@ -267,7 +273,9 @@ class _LocalFilesPanelState extends State<LocalFilesPanel> {
             );
     }
     return Column(
-      mainAxisSize: widget.compact ? MainAxisSize.min : MainAxisSize.max,
+      mainAxisSize: widget.compact || widget.embedded
+          ? MainAxisSize.min
+          : MainAxisSize.max,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (!widget.compact) ...[
@@ -289,7 +297,10 @@ class _LocalFilesPanelState extends State<LocalFilesPanel> {
           const SizedBox(height: 8),
         ],
         if (_busy) const LinearProgressIndicator(),
-        if (widget.compact) status else Expanded(child: status),
+        if (widget.compact || widget.embedded)
+          status
+        else
+          Expanded(child: status),
         if (widget.compact && widget.onViewAll != null)
           TextButton.icon(
             onPressed: widget.onViewAll,

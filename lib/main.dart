@@ -1,3 +1,9 @@
+import 'package:image_picker/image_picker.dart';
+
+import 'screens/translator_screen.dart';
+import 'services/document_speech.dart';
+import 'widgets/document_voice_dialog.dart';
+import 'screens/email_auth_screen.dart';
 import 'widgets/local_files_panel.dart';
 import 'screens/file_editor_hub_screen.dart';
 
@@ -201,7 +207,7 @@ class _JiggoAppState extends State<JiggoApp> {
       async_utils.unawaited(_loadSettings());
     }
     _authStream =
-        widget.authStateChanges ?? FirebaseAuth.instance.authStateChanges();
+        widget.authStateChanges ?? FirebaseAuth.instance.userChanges();
   }
 
   @override
@@ -209,7 +215,7 @@ class _JiggoAppState extends State<JiggoApp> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.authStateChanges != widget.authStateChanges) {
       _authStream =
-          widget.authStateChanges ?? FirebaseAuth.instance.authStateChanges();
+          widget.authStateChanges ?? FirebaseAuth.instance.userChanges();
     }
   }
 
@@ -311,9 +317,15 @@ class _JiggoAppState extends State<JiggoApp> {
                           ),
                         );
                       }
-                      _observeAccount(snapshot.data?.uid);
-                      return snapshot.data == null
+                      _observeAccount(
+                        AuthService.isMember(snapshot.data)
+                            ? snapshot.data!.uid
+                            : null,
+                      );
+                      return snapshot.data == null || snapshot.data!.isAnonymous
                           ? const LoginScreen()
+                          : !AuthService.isMember(snapshot.data)
+                          ? const VerifyEmailScreen()
                           : JiggoHomePage(
                               key: ValueKey(snapshot.data!.uid),
                               homeEvent: _homeEvent,
@@ -364,16 +376,79 @@ class _JiggoHomePageState extends State<JiggoHomePage> {
     super.dispose();
   }
 
-  void showComingSoon(String feature) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          context.tr('{feature} is coming soon', {
-            'feature': context.tr(feature),
-          }),
+  Future<void> _voice() async {
+    if (promptController.text.length >= 2000) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            context.tr('Shorten your message before adding voice input.'),
+          ),
+        ),
+      );
+      return;
+    }
+    final text = await showDialog<String>(
+      context: context,
+      builder: (_) => DocumentVoiceDialog(
+        speech: DeviceDocumentSpeech.instance,
+        initialLanguage: Localizations.localeOf(context).languageCode,
+        maxCharacters: 2000 - promptController.text.length,
+      ),
+    );
+    if (mounted && text != null) {
+      promptController.text = [
+        promptController.text.trim(),
+        text,
+      ].where((s) => s.isNotEmpty).join('\n');
+    }
+  }
+
+  Future<void> _attachments({bool cameraOnly = false}) async {
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (c) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text(c.tr('Images open in Scan & Solve.')),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_camera_outlined),
+              title: Text(c.tr('Take Photo')),
+              onTap: () => Navigator.pop(c, 'camera'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: Text(c.tr('Upload from Gallery')),
+              onTap: () => Navigator.pop(c, 'gallery'),
+            ),
+            if (!cameraOnly) ...[
+              ListTile(
+                leading: const Icon(Icons.picture_as_pdf_outlined),
+                title: Text(c.tr('Scan to PDF')),
+                onTap: () => Navigator.pop(c, 'pdf'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.edit_document),
+                title: Text(c.tr('File Editor')),
+                onTap: () => Navigator.pop(c, 'editor'),
+              ),
+            ],
+          ],
         ),
       ),
     );
+    if (!mounted || action == null) return;
+    final Widget page = switch (action) {
+      'camera' => const ScanScreen(initialSource: ImageSource.camera),
+      'gallery' => const ScanScreen(initialSource: ImageSource.gallery),
+      'pdf' => const ScanPdfScreen(),
+      _ => const FileEditorHubScreen(),
+    };
+    Navigator.push<void>(context, MaterialPageRoute(builder: (_) => page));
   }
 
   void _openChat(String question) {
@@ -394,10 +469,10 @@ class _JiggoHomePageState extends State<JiggoHomePage> {
       case HomeTool.documentMaker:
         setState(() => selectedIndex = 2);
         break;
-      case HomeTool.pdfScanner:
+      case HomeTool.translator:
         Navigator.push<void>(
           context,
-          MaterialPageRoute<void>(builder: (_) => const ScanPdfScreen()),
+          MaterialPageRoute<void>(builder: (_) => const TranslatorScreen()),
         );
         break;
       case HomeTool.fileEditor:
@@ -411,105 +486,115 @@ class _JiggoHomePageState extends State<JiggoHomePage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: selectedIndex == 0
-          ? AppBar(
-              backgroundColor: context.pageColor,
-              title: Text(
-                context.tr('Jiggo'),
-                style: TextStyle(
-                  fontSize: 25,
-                  fontWeight: FontWeight.bold,
-                  color: context.accentColor,
-                ),
-              ),
-              actions: [
-                IconButton(
-                  onPressed: () => Navigator.push<void>(
-                    context,
-                    MaterialPageRoute<void>(
-                      builder: (_) => const NotificationsScreen(),
-                    ),
+    return PopScope(
+      canPop: selectedIndex == 0,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop && mounted) setState(() => selectedIndex = 0);
+      },
+      child: Scaffold(
+        appBar: selectedIndex == 0
+            ? AppBar(
+                backgroundColor: context.pageColor,
+                title: Text(
+                  context.tr('Jiggo'),
+                  style: TextStyle(
+                    fontSize: 25,
+                    fontWeight: FontWeight.bold,
+                    color: context.accentColor,
                   ),
-                  icon: const Icon(Icons.notifications_outlined),
                 ),
-                IconButton(
-                  onPressed: () {
-                    setState(() {
-                      selectedIndex = 4;
-                    });
-                  },
-                  icon: const Icon(Icons.account_circle_outlined),
+                actions: [
+                  IconButton(
+                    onPressed: () => Navigator.push<void>(
+                      context,
+                      MaterialPageRoute<void>(
+                        builder: (_) => const NotificationsScreen(),
+                      ),
+                    ),
+                    icon: const Icon(Icons.notifications_outlined),
+                  ),
+                  IconButton(
+                    onPressed: () {
+                      setState(() {
+                        selectedIndex = 4;
+                      });
+                    },
+                    icon: const Icon(Icons.account_circle_outlined),
+                  ),
+                ],
+              )
+            : null,
+        body: IndexedStack(
+          index: selectedIndex,
+          children: [
+            HomeOverview(
+              recentFiles: FirebaseAuth.instance.currentUser == null
+                  ? null
+                  : LocalFilesPanel(
+                      key: ValueKey(
+                        'recent-${FirebaseAuth.instance.currentUser!.uid}',
+                      ),
+                      userId: FirebaseAuth.instance.currentUser!.uid,
+                      compact: true,
+                      currentOwner: () =>
+                          FirebaseAuth.instance.currentUser?.uid,
+                    ),
+              promptController: promptController,
+              onToolSelected: _openTool,
+              onSubmit: _openChat,
+              onUnavailable: (_) {},
+              onAttachment: _attachments,
+              onCamera: () => _attachments(cameraOnly: true),
+              onVoice: _voice,
+              onOpenLibrary: () => setState(() => selectedIndex = 3),
+            ),
+            const ScanScreen(),
+            const CreateScreen(),
+            const LibraryScreen(),
+            const ProfileScreen(),
+          ],
+        ),
+        bottomNavigationBar: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (selectedIndex == 0)
+              Visibility(
+                visible: MediaQuery.viewInsetsOf(context).bottom == 0,
+                maintainState: true,
+                child: const HomeBannerAd(),
+              ),
+            NavigationBar(
+              selectedIndex: selectedIndex,
+              onDestinationSelected: (index) {
+                setState(() {
+                  selectedIndex = index;
+                });
+              },
+              destinations: [
+                NavigationDestination(
+                  icon: const Icon(Icons.home_outlined),
+                  label: context.tr('Home'),
+                ),
+                NavigationDestination(
+                  icon: const Icon(Icons.document_scanner_outlined),
+                  label: context.tr('Scan'),
+                ),
+                NavigationDestination(
+                  icon: const Icon(Icons.add_box_outlined),
+                  label: context.tr('Create'),
+                ),
+                NavigationDestination(
+                  icon: const Icon(Icons.folder_outlined),
+                  label: context.tr('Library'),
+                ),
+                NavigationDestination(
+                  icon: const Icon(Icons.person_outline),
+                  label: context.tr('Profile'),
                 ),
               ],
-            )
-          : null,
-      body: IndexedStack(
-        index: selectedIndex,
-        children: [
-          HomeOverview(
-            recentFiles: FirebaseAuth.instance.currentUser == null
-                ? null
-                : LocalFilesPanel(
-                    key: ValueKey(
-                      'recent-${FirebaseAuth.instance.currentUser!.uid}',
-                    ),
-                    userId: FirebaseAuth.instance.currentUser!.uid,
-                    compact: true,
-                    currentOwner: () => FirebaseAuth.instance.currentUser?.uid,
-                  ),
-            promptController: promptController,
-            onToolSelected: _openTool,
-            onSubmit: _openChat,
-            onUnavailable: showComingSoon,
-            onOpenLibrary: () => setState(() => selectedIndex = 3),
-          ),
-          const ScanScreen(),
-          const CreateScreen(),
-          const LibraryScreen(),
-          const ProfileScreen(),
-        ],
-      ),
-      bottomNavigationBar: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (selectedIndex == 0)
-            Visibility(
-              visible: MediaQuery.viewInsetsOf(context).bottom == 0,
-              maintainState: true,
-              child: const HomeBannerAd(),
             ),
-          NavigationBar(
-            selectedIndex: selectedIndex,
-            onDestinationSelected: (index) {
-              setState(() {
-                selectedIndex = index;
-              });
-            },
-            destinations: [
-              NavigationDestination(
-                icon: const Icon(Icons.home_outlined),
-                label: context.tr('Home'),
-              ),
-              NavigationDestination(
-                icon: const Icon(Icons.document_scanner_outlined),
-                label: context.tr('Scan'),
-              ),
-              NavigationDestination(
-                icon: const Icon(Icons.add_box_outlined),
-                label: context.tr('Create'),
-              ),
-              NavigationDestination(
-                icon: const Icon(Icons.folder_outlined),
-                label: context.tr('Library'),
-              ),
-              NavigationDestination(
-                icon: const Icon(Icons.person_outline),
-                label: context.tr('Profile'),
-              ),
-            ],
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

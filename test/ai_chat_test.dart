@@ -111,7 +111,7 @@ void main() {
   });
 
   testWidgets(
-    'Home submission forwards the exact question and opens blank chat history',
+    'Home submission forwards the exact question without a duplicate history link',
     (tester) async {
       final controller = TextEditingController();
       addTearDown(controller.dispose);
@@ -135,8 +135,7 @@ void main() {
       await tester.enterText(find.byType(TextField), 'Explain photosynthesis');
       await tester.tap(find.byKey(const ValueKey('home-chat-send')));
       expect(submitted, 'Explain photosynthesis');
-      await tester.tap(find.byKey(const ValueKey('home-chat-history')));
-      expect(submitted, '');
+      expect(find.byKey(const ValueKey('home-chat-history')), findsNothing);
     },
   );
 

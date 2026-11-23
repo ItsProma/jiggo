@@ -1,3 +1,4 @@
+import '../widgets/guarded_page_exit.dart';
 import '../services/local_file_saver.dart';
 import '../services/local_file_model.dart';
 
@@ -33,7 +34,8 @@ class ScanPdfScreen extends StatefulWidget {
   State<ScanPdfScreen> createState() => _ScanPdfScreenState();
 }
 
-class _ScanPdfScreenState extends State<ScanPdfScreen> {
+class _ScanPdfScreenState extends State<ScanPdfScreen>
+    with GuardedPageExit<ScanPdfScreen> {
   late final _photos = widget.photos ?? DeviceScanPhotos();
   late final _images = widget.images ?? PdfScanImages();
   late final _builder = widget.builder ?? ScanPdfBuilder();
@@ -317,7 +319,7 @@ class _ScanPdfScreenState extends State<ScanPdfScreen> {
       );
       if (!mounted || leave != true) return;
     }
-    if (mounted) Navigator.pop(context);
+    if (mounted) await finishPageExit();
   }
 
   void _preview(PdfScanPage page, int number) {
@@ -341,257 +343,263 @@ class _ScanPdfScreenState extends State<ScanPdfScreen> {
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    backgroundColor: context.pageColor,
-    appBar: AppBar(
-      leading: BackButton(onPressed: _close),
-      title: Text(context.tr('Scan to PDF')),
-    ),
-    body: SafeArea(
-      child: Column(
-        children: [
-          Expanded(
-            child: ReorderableListView.builder(
-              padding: const EdgeInsets.all(16),
-              buildDefaultDragHandles: false,
-              header: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    context.tr(
-                      'Create a PDF from photos on this device. No AI request is made.',
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    key: const ValueKey('scan-pdf-title'),
-                    controller: _title,
-                    enabled: !_busy,
-                    maxLength: 80,
-                    maxLengthEnforcement: MaxLengthEnforcement.none,
-                    buildCounter: (
-                      context, {
-                      required currentLength,
-                      required isFocused,
-                      maxLength,
-                    }) => Text('${_title.text.length}/80'),
-                    decoration: InputDecoration(
-                      labelText: context.tr('PDF file name'),
-                    ),
-                    onChanged: (_) => setState(_invalidate),
-                  ),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      FilledButton.icon(
-                        key: const ValueKey('scan-pdf-camera'),
-                        onPressed: _busy || _pages.length >= 20
-                            ? null
-                            : () => _pick(true),
-                        icon: const Icon(Icons.camera_alt_outlined),
-                        label: Text(context.tr('Take photo')),
+  Widget build(BuildContext context) => guardPageExit(
+    Scaffold(
+      backgroundColor: context.pageColor,
+      appBar: AppBar(
+        leading: BackButton(onPressed: () => guardedBack(_close)),
+        title: Text(context.tr('Scan to PDF')),
+      ),
+      body: SafeArea(
+        child: Column(
+          children: [
+            Expanded(
+              child: ReorderableListView.builder(
+                padding: const EdgeInsets.all(16),
+                buildDefaultDragHandles: false,
+                header: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      context.tr(
+                        'Create a PDF from photos on this device. No AI request is made.',
                       ),
-                      OutlinedButton.icon(
-                        key: const ValueKey('scan-pdf-gallery'),
-                        onPressed: _busy || _pages.length >= 20
-                            ? null
-                            : () => _pick(false),
-                        icon: const Icon(Icons.photo_library_outlined),
-                        label: Text(context.tr('Add photos')),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      key: const ValueKey('scan-pdf-title'),
+                      controller: _title,
+                      enabled: !_busy,
+                      maxLength: 80,
+                      maxLengthEnforcement: MaxLengthEnforcement.none,
+                      buildCounter: (
+                        context, {
+                        required currentLength,
+                        required isFocused,
+                        maxLength,
+                      }) => Text('${_title.text.length}/80'),
+                      decoration: InputDecoration(
+                        labelText: context.tr('PDF file name'),
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    context.tr(
-                      'JPG, PNG or WebP. Up to 20 pages. Very large, damaged or unsupported files are skipped.',
+                      onChanged: (_) => setState(_invalidate),
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    context.tr('Pages: {count}/20', {'count': _pages.length}),
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  Text(
-                    context.tr(
-                      'Drag the handle or use the arrows to change page order. Tap a photo to zoom.',
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  if (_busy) const LinearProgressIndicator(),
-                  if (_notice != null)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      child: Text(context.tr(_notice!, _noticeValues)),
-                    ),
-                  if (_pages.isEmpty)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 32),
-                      child: Text(context.tr('Add your first page to begin.')),
-                    ),
-                ],
-              ),
-              itemCount: _pages.length,
-              onReorderItem: (oldIndex, newIndex) => _move(oldIndex, newIndex),
-              itemBuilder: (context, index) {
-                final page = _pages[index];
-                return Card(
-                  key: ValueKey(page.id),
-                  color: context.cardColor,
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Column(
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
                       children: [
-                        Row(
-                          children: [
-                            InkWell(
-                              onTap: _busy
-                                  ? null
-                                  : () => _preview(page, index + 1),
-                              child: Image.memory(
-                                page.preview,
-                                width: 64,
-                                height: 84,
-                                fit: BoxFit.contain,
-                                cacheWidth: 160,
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    context.tr('Page {number}', {
-                                      'number': index + 1,
-                                    }),
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                  Text(
-                                    page.name,
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ],
-                              ),
-                            ),
-                            ReorderableDragStartListener(
-                              index: index,
-                              enabled: !_busy,
-                              child: Tooltip(
-                                message: context.tr('Drag to reorder'),
-                                child: const Padding(
-                                  padding: EdgeInsets.all(10),
-                                  child: Icon(Icons.drag_handle),
-                                ),
-                              ),
-                            ),
-                          ],
+                        FilledButton.icon(
+                          key: const ValueKey('scan-pdf-camera'),
+                          onPressed: _busy || _pages.length >= 20
+                              ? null
+                              : () => _pick(true),
+                          icon: const Icon(Icons.camera_alt_outlined),
+                          label: Text(context.tr('Take photo')),
                         ),
-                        Wrap(
-                          spacing: 4,
-                          children: [
-                            IconButton(
-                              key: ValueKey('crop-${page.id}'),
-                              tooltip: context.tr('Crop page'),
-                              onPressed: _busy
-                                  ? null
-                                  : () => _edit(page, 'crop'),
-                              icon: const Icon(Icons.crop),
-                            ),
-                            IconButton(
-                              key: ValueKey('rotate-${page.id}'),
-                              tooltip: context.tr('Rotate page'),
-                              onPressed: _busy
-                                  ? null
-                                  : () => _edit(page, 'rotate'),
-                              icon: const Icon(Icons.rotate_90_degrees_cw),
-                            ),
-                            IconButton(
-                              key: ValueKey('reset-${page.id}'),
-                              tooltip: context.tr('Reset page'),
-                              onPressed: _busy || !page.edited
-                                  ? null
-                                  : () => _edit(page, 'reset'),
-                              icon: const Icon(Icons.restart_alt),
-                            ),
-                            IconButton(
-                              key: ValueKey('up-${page.id}'),
-                              tooltip: context.tr('Move page up'),
-                              onPressed: _busy || index == 0
-                                  ? null
-                                  : () => _move(index, index - 1),
-                              icon: const Icon(Icons.arrow_upward),
-                            ),
-                            IconButton(
-                              key: ValueKey('down-${page.id}'),
-                              tooltip: context.tr('Move page down'),
-                              onPressed: _busy || index == _pages.length - 1
-                                  ? null
-                                  : () => _move(index, index + 1),
-                              icon: const Icon(Icons.arrow_downward),
-                            ),
-                            IconButton(
-                              key: ValueKey('remove-${page.id}'),
-                              tooltip: context.tr('Remove page'),
-                              onPressed: _busy
-                                  ? null
-                                  : () => setState(() {
-                                      _pages.removeAt(index);
-                                      _invalidate();
-                                    }),
-                              icon: const Icon(Icons.delete_outline),
-                            ),
-                          ],
+                        OutlinedButton.icon(
+                          key: const ValueKey('scan-pdf-gallery'),
+                          onPressed: _busy || _pages.length >= 20
+                              ? null
+                              : () => _pick(false),
+                          icon: const Icon(Icons.photo_library_outlined),
+                          label: Text(context.tr('Add photos')),
                         ),
                       ],
                     ),
-                  ),
-                );
-              },
+                    const SizedBox(height: 12),
+                    Text(
+                      context.tr(
+                        'JPG, PNG or WebP. Up to 20 pages. Very large, damaged or unsupported files are skipped.',
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      context.tr('Pages: {count}/20', {'count': _pages.length}),
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    Text(
+                      context.tr(
+                        'Drag the handle or use the arrows to change page order. Tap a photo to zoom.',
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    if (_busy) const LinearProgressIndicator(),
+                    if (_notice != null)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        child: Text(context.tr(_notice!, _noticeValues)),
+                      ),
+                    if (_pages.isEmpty)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 32),
+                        child: Text(
+                          context.tr('Add your first page to begin.'),
+                        ),
+                      ),
+                  ],
+                ),
+                itemCount: _pages.length,
+                onReorderItem: (oldIndex, newIndex) =>
+                    _move(oldIndex, newIndex),
+                itemBuilder: (context, index) {
+                  final page = _pages[index];
+                  return Card(
+                    key: ValueKey(page.id),
+                    color: context.cardColor,
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Column(
+                        children: [
+                          Row(
+                            children: [
+                              InkWell(
+                                onTap: _busy
+                                    ? null
+                                    : () => _preview(page, index + 1),
+                                child: Image.memory(
+                                  page.preview,
+                                  width: 64,
+                                  height: 84,
+                                  fit: BoxFit.contain,
+                                  cacheWidth: 160,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      context.tr('Page {number}', {
+                                        'number': index + 1,
+                                      }),
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    Text(
+                                      page.name,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              ReorderableDragStartListener(
+                                index: index,
+                                enabled: !_busy,
+                                child: Tooltip(
+                                  message: context.tr('Drag to reorder'),
+                                  child: const Padding(
+                                    padding: EdgeInsets.all(10),
+                                    child: Icon(Icons.drag_handle),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          Wrap(
+                            spacing: 4,
+                            children: [
+                              IconButton(
+                                key: ValueKey('crop-${page.id}'),
+                                tooltip: context.tr('Crop page'),
+                                onPressed: _busy
+                                    ? null
+                                    : () => _edit(page, 'crop'),
+                                icon: const Icon(Icons.crop),
+                              ),
+                              IconButton(
+                                key: ValueKey('rotate-${page.id}'),
+                                tooltip: context.tr('Rotate page'),
+                                onPressed: _busy
+                                    ? null
+                                    : () => _edit(page, 'rotate'),
+                                icon: const Icon(Icons.rotate_90_degrees_cw),
+                              ),
+                              IconButton(
+                                key: ValueKey('reset-${page.id}'),
+                                tooltip: context.tr('Reset page'),
+                                onPressed: _busy || !page.edited
+                                    ? null
+                                    : () => _edit(page, 'reset'),
+                                icon: const Icon(Icons.restart_alt),
+                              ),
+                              IconButton(
+                                key: ValueKey('up-${page.id}'),
+                                tooltip: context.tr('Move page up'),
+                                onPressed: _busy || index == 0
+                                    ? null
+                                    : () => _move(index, index - 1),
+                                icon: const Icon(Icons.arrow_upward),
+                              ),
+                              IconButton(
+                                key: ValueKey('down-${page.id}'),
+                                tooltip: context.tr('Move page down'),
+                                onPressed: _busy || index == _pages.length - 1
+                                    ? null
+                                    : () => _move(index, index + 1),
+                                icon: const Icon(Icons.arrow_downward),
+                              ),
+                              IconButton(
+                                key: ValueKey('remove-${page.id}'),
+                                tooltip: context.tr('Remove page'),
+                                onPressed: _busy
+                                    ? null
+                                    : () => setState(() {
+                                        _pages.removeAt(index);
+                                        _invalidate();
+                                      }),
+                                icon: const Icon(Icons.delete_outline),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-            child: Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              alignment: WrapAlignment.center,
-              children: [
-                OutlinedButton.icon(
-                  key: const ValueKey('local-library-save'),
-                  onPressed: _busy || _pdf == null
-                      ? null
-                      : () => _deliver(false, library: true),
-                  icon: const Icon(Icons.library_add_outlined),
-                  label: Text(context.tr('Save to Library')),
-                ),
-                FilledButton.icon(
-                  key: const ValueKey('scan-pdf-create'),
-                  onPressed: _busy || _pages.isEmpty ? null : _create,
-                  icon: const Icon(Icons.picture_as_pdf_outlined),
-                  label: Text(context.tr('Create PDF')),
-                ),
-                if (_pdf != null) ...[
-                  OutlinedButton(
-                    key: const ValueKey('scan-pdf-save'),
-                    onPressed: _busy ? null : () => _deliver(false),
-                    child: Text(context.tr('Save PDF')),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                alignment: WrapAlignment.center,
+                children: [
+                  OutlinedButton.icon(
+                    key: const ValueKey('local-library-save'),
+                    onPressed: _busy || _pdf == null
+                        ? null
+                        : () => _deliver(false, library: true),
+                    icon: const Icon(Icons.library_add_outlined),
+                    label: Text(context.tr('Save to Library')),
                   ),
-                  OutlinedButton(
-                    key: const ValueKey('scan-pdf-share'),
-                    onPressed: _busy ? null : () => _deliver(true),
-                    child: Text(context.tr('Share PDF')),
+                  FilledButton.icon(
+                    key: const ValueKey('scan-pdf-create'),
+                    onPressed: _busy || _pages.isEmpty ? null : _create,
+                    icon: const Icon(Icons.picture_as_pdf_outlined),
+                    label: Text(context.tr('Create PDF')),
                   ),
+                  if (_pdf != null) ...[
+                    OutlinedButton(
+                      key: const ValueKey('scan-pdf-save'),
+                      onPressed: _busy ? null : () => _deliver(false),
+                      child: Text(context.tr('Save PDF')),
+                    ),
+                    OutlinedButton(
+                      key: const ValueKey('scan-pdf-share'),
+                      onPressed: _busy ? null : () => _deliver(true),
+                      child: Text(context.tr('Share PDF')),
+                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     ),
+    _close,
   );
 }

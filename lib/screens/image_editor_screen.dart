@@ -1,3 +1,4 @@
+import '../widgets/guarded_page_exit.dart';
 import '../services/local_file_saver.dart';
 import '../services/local_file_model.dart';
 
@@ -29,7 +30,8 @@ class ImageEditorScreen extends StatefulWidget {
   State<ImageEditorScreen> createState() => _ImageEditorScreenState();
 }
 
-class _ImageEditorScreenState extends State<ImageEditorScreen> {
+class _ImageEditorScreenState extends State<ImageEditorScreen>
+    with GuardedPageExit<ImageEditorScreen> {
   late final _files = widget.files ?? DeviceImageEditFiles();
   final _title = TextEditingController(text: 'My image');
   ImageEditHistory? _history;
@@ -356,190 +358,193 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
 
   Future<void> _close() async {
     if (_busy || !await _confirm() || !mounted) return;
-    Navigator.pop(context);
+    await finishPageExit();
   }
 
   @override
   Widget build(BuildContext context) {
     final frame = _history?.current;
-    return Scaffold(
-      appBar: AppBar(
-        leading: BackButton(onPressed: _close),
-        title: Text(context.tr('Image Editor')),
-      ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                context.tr(
-                  'Edit JPG and PNG locally. Save a new copy before closing or refreshing.',
+    return guardPageExit(
+      Scaffold(
+        appBar: AppBar(
+          leading: BackButton(onPressed: () => guardedBack(_close)),
+          title: Text(context.tr('Image Editor')),
+        ),
+        body: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  context.tr(
+                    'Edit JPG and PNG locally. Save a new copy before closing or refreshing.',
+                  ),
                 ),
-              ),
-              const SizedBox(height: 12),
-              FilledButton.icon(
-                onPressed: _busy ? null : _open,
-                icon: const Icon(Icons.photo_library_outlined),
-                label: Text(context.tr('Open image')),
-              ),
-              if (_busy && !_modalOpen) const LinearProgressIndicator(),
-              if (_notice != null)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  child: Text(context.tr(_notice!)),
-                ),
-              if (frame != null) ...[
                 const SizedBox(height: 12),
-                Text('${frame.width} × ${frame.height} px'),
-                const SizedBox(height: 8),
-                Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(
-                      maxHeight: 360,
-                      maxWidth: 700,
-                    ),
-                    child: AspectRatio(
-                      aspectRatio: frame.width / frame.height,
-                      child: InteractiveViewer(
-                        minScale: 1,
-                        maxScale: 4,
-                        child: Stack(
-                          fit: StackFit.expand,
-                          children: [
-                            const CustomPaint(painter: ImageCheckerboard()),
-                            Image.memory(
-                              frame.bytes,
-                              fit: BoxFit.contain,
-                              gaplessPlayback: true,
-                            ),
-                          ],
+                FilledButton.icon(
+                  onPressed: _busy ? null : _open,
+                  icon: const Icon(Icons.photo_library_outlined),
+                  label: Text(context.tr('Open image')),
+                ),
+                if (_busy && !_modalOpen) const LinearProgressIndicator(),
+                if (_notice != null)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    child: Text(context.tr(_notice!)),
+                  ),
+                if (frame != null) ...[
+                  const SizedBox(height: 12),
+                  Text('${frame.width} × ${frame.height} px'),
+                  const SizedBox(height: 8),
+                  Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(
+                        maxHeight: 360,
+                        maxWidth: 700,
+                      ),
+                      child: AspectRatio(
+                        aspectRatio: frame.width / frame.height,
+                        child: InteractiveViewer(
+                          minScale: 1,
+                          maxScale: 4,
+                          child: Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              const CustomPaint(painter: ImageCheckerboard()),
+                              Image.memory(
+                                frame.bytes,
+                                fit: BoxFit.contain,
+                                gaplessPlayback: true,
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
                   ),
-                ),
-                const SizedBox(height: 12),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    OutlinedButton.icon(
-                      onPressed: _busy ? null : () => _edit(_crop),
-                      icon: const Icon(Icons.crop),
-                      label: Text(context.tr('Crop image')),
-                    ),
-                    OutlinedButton.icon(
-                      onPressed: _busy
-                          ? null
-                          : () => _edit(widget.processor.rotate),
-                      icon: const Icon(Icons.rotate_90_degrees_cw),
-                      label: Text(context.tr('Rotate image')),
-                    ),
-                    OutlinedButton(
-                      onPressed: _busy ? null : () => _edit(_resize),
-                      child: Text(context.tr('Resize image')),
-                    ),
-                    OutlinedButton(
-                      onPressed: _busy ? null : () => _edit(_text),
-                      child: Text(context.tr('Add text')),
-                    ),
-                    IconButton(
-                      tooltip: context.tr('Undo'),
-                      onPressed: !_busy && _history!.canUndo
-                          ? () => _undo(false)
-                          : null,
-                      icon: const Icon(Icons.undo),
-                    ),
-                    IconButton(
-                      tooltip: context.tr('Redo'),
-                      onPressed: !_busy && _history!.canRedo
-                          ? () => _undo(true)
-                          : null,
-                      icon: const Icon(Icons.redo),
-                    ),
-                    TextButton(
-                      onPressed: _busy
-                          ? null
-                          : () => _edit((_) async => _history!.original),
-                      child: Text(context.tr('Reset image')),
-                    ),
-                  ],
-                ),
-                Text(
-                  context.tr(
-                    'Text becomes part of the picture after applying. Use Undo to change it. Undo history is limited for large images.',
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      OutlinedButton.icon(
+                        onPressed: _busy ? null : () => _edit(_crop),
+                        icon: const Icon(Icons.crop),
+                        label: Text(context.tr('Crop image')),
+                      ),
+                      OutlinedButton.icon(
+                        onPressed: _busy
+                            ? null
+                            : () => _edit(widget.processor.rotate),
+                        icon: const Icon(Icons.rotate_90_degrees_cw),
+                        label: Text(context.tr('Rotate image')),
+                      ),
+                      OutlinedButton(
+                        onPressed: _busy ? null : () => _edit(_resize),
+                        child: Text(context.tr('Resize image')),
+                      ),
+                      OutlinedButton(
+                        onPressed: _busy ? null : () => _edit(_text),
+                        child: Text(context.tr('Add text')),
+                      ),
+                      IconButton(
+                        tooltip: context.tr('Undo'),
+                        onPressed: !_busy && _history!.canUndo
+                            ? () => _undo(false)
+                            : null,
+                        icon: const Icon(Icons.undo),
+                      ),
+                      IconButton(
+                        tooltip: context.tr('Redo'),
+                        onPressed: !_busy && _history!.canRedo
+                            ? () => _undo(true)
+                            : null,
+                        icon: const Icon(Icons.redo),
+                      ),
+                      TextButton(
+                        onPressed: _busy
+                            ? null
+                            : () => _edit((_) async => _history!.original),
+                        child: Text(context.tr('Reset image')),
+                      ),
+                    ],
                   ),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  key: const ValueKey('image-file-title'),
-                  controller: _title,
-                  enabled: !_busy,
-                  maxLength: 140,
-                  maxLengthEnforcement: MaxLengthEnforcement.none,
-                  buildCounter: (
-                    context, {
-                    required currentLength,
-                    required isFocused,
-                    maxLength,
-                  }) => Text('${_title.text.length}/140'),
-                  decoration: InputDecoration(
-                    labelText: context.tr('File title'),
-                  ),
-                  onChanged: (_) => setState(() {}),
-                ),
-                DropdownButtonFormField<String>(
-                  key: ValueKey('image-format-$_format'),
-                  initialValue: _format,
-                  isExpanded: true,
-                  decoration: InputDecoration(
-                    labelText: context.tr('Image format'),
-                  ),
-                  items: const [
-                    DropdownMenuItem(value: 'png', child: Text('PNG')),
-                    DropdownMenuItem(value: 'jpg', child: Text('JPG')),
-                  ],
-                  onChanged: _busy
-                      ? null
-                      : (v) => setState(() => _format = v ?? _format),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  context.tr(
-                    _format == 'png' ? 'PNG keeps transparent areas.' : 'JPG uses quality 95. Transparent areas become white.',
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    OutlinedButton.icon(
-                      key: const ValueKey('local-library-save'),
-                      onPressed: _busy || _history == null
-                          ? null
-                          : () => _export(false, library: true),
-                      icon: const Icon(Icons.library_add_outlined),
-                      label: Text(context.tr('Save to Library')),
+                  Text(
+                    context.tr(
+                      'Text becomes part of the picture after applying. Use Undo to change it. Undo history is limited for large images.',
                     ),
-                    FilledButton(
-                      onPressed: _busy ? null : () => _export(false),
-                      child: Text(context.tr('Save image copy')),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    key: const ValueKey('image-file-title'),
+                    controller: _title,
+                    enabled: !_busy,
+                    maxLength: 140,
+                    maxLengthEnforcement: MaxLengthEnforcement.none,
+                    buildCounter: (
+                      context, {
+                      required currentLength,
+                      required isFocused,
+                      maxLength,
+                    }) => Text('${_title.text.length}/140'),
+                    decoration: InputDecoration(
+                      labelText: context.tr('File title'),
                     ),
-                    OutlinedButton(
-                      onPressed: _busy ? null : () => _export(true),
-                      child: Text(context.tr('Share image')),
+                    onChanged: (_) => setState(() {}),
+                  ),
+                  DropdownButtonFormField<String>(
+                    key: ValueKey('image-format-$_format'),
+                    initialValue: _format,
+                    isExpanded: true,
+                    decoration: InputDecoration(
+                      labelText: context.tr('Image format'),
                     ),
-                  ],
-                ),
+                    items: const [
+                      DropdownMenuItem(value: 'png', child: Text('PNG')),
+                      DropdownMenuItem(value: 'jpg', child: Text('JPG')),
+                    ],
+                    onChanged: _busy
+                        ? null
+                        : (v) => setState(() => _format = v ?? _format),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    context.tr(
+                      _format == 'png' ? 'PNG keeps transparent areas.' : 'JPG uses quality 95. Transparent areas become white.',
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      OutlinedButton.icon(
+                        key: const ValueKey('local-library-save'),
+                        onPressed: _busy || _history == null
+                            ? null
+                            : () => _export(false, library: true),
+                        icon: const Icon(Icons.library_add_outlined),
+                        label: Text(context.tr('Save to Library')),
+                      ),
+                      FilledButton(
+                        onPressed: _busy ? null : () => _export(false),
+                        child: Text(context.tr('Save image copy')),
+                      ),
+                      OutlinedButton(
+                        onPressed: _busy ? null : () => _export(true),
+                        child: Text(context.tr('Share image')),
+                      ),
+                    ],
+                  ),
+                ],
+                const SizedBox(height: 24),
               ],
-              const SizedBox(height: 24),
-            ],
+            ),
           ),
         ),
       ),
+      _close,
     );
   }
 }

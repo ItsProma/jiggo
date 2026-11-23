@@ -13,16 +13,27 @@ initializeApp();
 
 const openaiApiKey = defineSecret("OPENAI_API_KEY");
 
+// Anonymous visitors may explore the UI, but cannot use member endpoints.
+function requireMember(request) {
+  const provider = request.auth?.token?.firebase?.sign_in_provider;
+  if (!request.auth?.uid || !['google.com', 'password'].includes(provider)) {
+    throw new HttpsError('unauthenticated', 'Sign in with Google or email first.', {reason: 'member-required'});
+  }
+  if (provider === 'password' && request.auth.token.email_verified !== true) {
+    throw new HttpsError('permission-denied', 'Verify your email first.', {reason: 'email-verification'});
+  }
+}
+
 // Notification endpoints have no AI secrets or AI quota side effects. Keep the
 // implementation lazy so the existing callable workflows remain independent.
 const notificationOptions = { region: "europe-west1", enforceAppCheck: true,
   timeoutSeconds: 20, memory: "256MiB", maxInstances: 2, concurrency: 20 };
 exports.registerNotificationDevice = onCall(notificationOptions,
-  request => require("./notification_backend.cjs").register(request));
+  request => { requireMember(request); return require("./notification_backend.cjs").register(request); });
 exports.unregisterNotificationDevice = onCall(notificationOptions,
   request => require("./notification_backend.cjs").unregister(request));
 exports.sendNotificationTest = onCall(notificationOptions,
-  request => require("./notification_backend.cjs").sendTest(request));
+  request => { requireMember(request); return require("./notification_backend.cjs").sendTest(request); });
 
 
 const ELIGIBILITY_VERSION = 1;
@@ -40,6 +51,7 @@ async function ensureAiEligibility(transaction, uid) {
   }
 }
 function checkEligibilityRequest(request, extraFields = []) {
+  requireMember(request);
   if (!request.auth) throw new HttpsError("unauthenticated", "Please sign in first.");
   const data = request.data;
   if (!data || typeof data !== "object" || Array.isArray(data) ||
@@ -460,6 +472,7 @@ exports.solveQuestion = onCall(
     enforceAppCheck: true,
   },
   async (request) => {
+    requireMember(request);
     if (!request.auth) {
       throw new HttpsError(
         "unauthenticated",
@@ -649,6 +662,7 @@ let handwritingHandler;
 exports.recognizeHandwriting = onCall({ region: "europe-west1", enforceAppCheck: true,
   secrets: [openaiApiKey], timeoutSeconds: 60, memory: "256MiB", maxInstances: 2, concurrency: 2 },
 async request => {
+  requireMember(request);
   handwritingHandler ??= require("./handwriting_backend.cjs").createHandwritingBackend({
     db: getFirestore(), FieldValue, HttpsError, detectImageType, maxImageBytes: MAX_IMAGE_BYTES,
     reserveDailyScan, refundDailyScan, ensureAccountActive, finishAiGuard, safeAiFailure,
@@ -753,20 +767,23 @@ exports.generateDocument = onCall(
     enforceAppCheck: true,
   },
   async (request) => {
+    requireMember(request);
     if (!request.auth) {
       throw new HttpsError("unauthenticated", "Please sign in to generate a document.");
     }
     if (!request.data || typeof request.data !== "object" || Array.isArray(request.data) ||
-        Object.keys(request.data).some((key) => !["title", "instructions", "documentType", "language", "expectedUid"].includes(key))) {
+        Object.keys(request.data).some((key) => !["title", "instructions", "documentType", "language", "expectedUid", "previewOnly", "extractOnly"].includes(key))) {
       throw new HttpsError("invalid-argument", "Provide only the supported document fields.");
     }
     if (request.data.expectedUid !== undefined && request.data.expectedUid !== request.auth.uid) {
       throw new HttpsError("failed-precondition", "The signed-in account changed. Please try again.", { reason: "account-changed" });
     }
-    const { title, instructions, documentType, language } = request.data;
+    const { title, instructions, documentType, language, previewOnly = false, extractOnly = false } = request.data;
     if (
+      typeof previewOnly !== "boolean" || typeof extractOnly !== "boolean" ||
+      (extractOnly && (!previewOnly || !["CV / Resume", "Job Application", "Leave Application", "Formal Letter", "Assignment"].includes(documentType) || typeof instructions !== "string" || instructions.length > 2000)) ||
       typeof title !== "string" || title.trim().length < 3 || title.length > 150 ||
-      typeof instructions !== "string" || instructions.trim().length < 10 || instructions.length > 2000 ||
+      typeof instructions !== "string" || instructions.trim().length < 10 || instructions.length > (previewOnly === true ? 8000 : 2000) ||
       typeof documentType !== "string" || !documentType.trim() || documentType.length > 100 ||
       !["Bangla", "English"].includes(language)
     ) {
@@ -795,7 +812,7 @@ exports.generateDocument = onCall(
           language,
           instructions: instructions.trim(),
         }),
-        instructions: `You are Jiggo, an AI document writing assistant.
+        instructions: extractOnly ? require('./document_details.cjs').extractionInstructions(normalizedType) : `You are Jiggo, an AI document writing assistant.
 Write only the requested document content in the requested language.
 Use clear Markdown headings, short paragraphs and simple lists.
 Avoid Markdown tables, HTML, code fences and horizontal rules so editing and PDF export stay readable.
@@ -812,9 +829,18 @@ ${guidance}`,
       if (typeof document !== "string" || !document.trim()) {
         throw new Error("Empty AI document");
       }
+      const details = extractOnly ? require('./document_details.cjs').parseDetails(normalizedType, document) : null;
       aiSucceeded = true;
       let savedToLibrary = false;
-      for (let attempt = 1; attempt <= 3; attempt++) {
+      if (previewOnly) {
+        await getFirestore().runTransaction(async transaction => {
+          await ensureAccountActive(transaction, uid);
+          const state = await transaction.get(reservation.requestRef);
+          if (!state.exists || state.data().status !== "reserved") throw new Error("Invalid preview reservation");
+          transaction.update(reservation.requestRef, {status: "completed", previewOnly: true, completedAt: FieldValue.serverTimestamp()});
+        });
+      }
+      for (let attempt = 1; !previewOnly && attempt <= 3; attempt++) {
         try {
           await saveGeneratedDocument(reservation, documentRef, {
             title: normalizedTitle,
@@ -830,10 +856,12 @@ ${guidance}`,
       }
       return {
         success: true,
-        document,
+        ...(extractOnly ? {details} : {document}),
+        extractOnly,
         title: normalizedTitle,
         documentType: normalizedType,
         language,
+        previewOnly,
         savedToLibrary,
         documentId: savedToLibrary ? requestId : null,
         dailyLimit: DOCUMENT_DAILY_LIMIT,
@@ -850,6 +878,7 @@ ${guidance}`,
           console.error("Document refund failed:", safeErrorCode(refundError));
         }
       }
+      if (extractOnly && error instanceof HttpsError) throw error;
       throw safeAiFailure(error);
     } finally {
       try {
@@ -867,6 +896,7 @@ let chatHandler;
 exports.aiChat = onCall({ region: "europe-west1", enforceAppCheck: true,
   secrets: [openaiApiKey], timeoutSeconds: 60, memory: "256MiB", maxInstances: 2, concurrency: 2 },
 async request => {
+  requireMember(request);
   chatHandler ??= require("./chat_backend.cjs").createChatBackend({
     db: getFirestore(), FieldValue, HttpsError, ensureAccountActive,
     ensureAiEligibility, readAiGuard, writeAiGuard, finishAiGuard, safeAiFailure,
@@ -1042,3 +1072,20 @@ exports.reportAiContent = onCall(
     return { received: true };
   }
 );
+
+let translationHandler;
+exports.translateText = onCall({region: 'europe-west1', enforceAppCheck: true,
+  secrets: [openaiApiKey], timeoutSeconds: 60, memory: '256MiB', maxInstances: 2, concurrency: 2}, async request => {
+  translationHandler ??= require('./translation_backend.cjs').createTranslationBackend({
+    HttpsError, requireMember, reserve: reserveDocument, refund: refundDocument,
+    complete: reservation => getFirestore().runTransaction(async tx => {
+      await ensureAccountActive(tx, reservation.uid);
+      const state = await tx.get(reservation.requestRef);
+      if (!state.exists || state.data().status !== 'reserved') throw new Error('translation-reservation');
+      tx.update(reservation.requestRef, {status: 'completed', previewOnly: true, completedAt: FieldValue.serverTimestamp()});
+    }),
+    finish: finishAiGuard, createAI: uid => new SafeLunaClient({apiKey: openaiApiKey.value(),uid}),
+    safeAiFailure, newId: randomUUID, dailyLimit: DOCUMENT_DAILY_LIMIT,
+  });
+  return translationHandler(request);
+});

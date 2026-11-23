@@ -1,3 +1,4 @@
+import 'guided_document_store.dart';
 import 'local_file_store.dart';
 
 import 'package:cloud_functions/cloud_functions.dart';
@@ -12,7 +13,64 @@ class AuthService {
   static Future<void>? _googleInitialization;
 
   User? get currentUser => _auth.currentUser;
-  Stream<User?> get authStateChanges => _auth.authStateChanges();
+  Stream<User?> get authStateChanges => _auth.userChanges();
+  static bool isMember(User? user) =>
+      user != null &&
+      !user.isAnonymous &&
+      (!user.providerData.any((p) => p.providerId == 'password') ||
+          user.emailVerified);
+
+  static String? validateEmail(String value) =>
+      RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(value.trim()) &&
+          value.length <= 254
+      ? null
+      : 'Enter a valid email address.';
+  static String? validatePassword(String value) =>
+      value.length >= 8 && value.length <= 128
+      ? null
+      : 'Use a password with 8 to 128 characters.';
+
+  Future<void> _leaveGuest() async {
+    if (_auth.currentUser?.isAnonymous == true) await signOut();
+  }
+
+  Future<void> createEmailAccount(
+    String name,
+    String email,
+    String password,
+  ) async {
+    final error =
+        validateDisplayName(name) ??
+        validateEmail(email) ??
+        validatePassword(password);
+    if (error != null) throw FormatException(error);
+    await _leaveGuest();
+    final result = await _auth.createUserWithEmailAndPassword(
+      email: email.trim(),
+      password: password,
+    );
+    await result.user?.updateDisplayName(name.trim());
+    // Verification screen owns sending/retrying email; account creation is complete.
+  }
+
+  Future<void> signInWithEmail(String email, String password) async {
+    await _leaveGuest();
+    await _auth.signInWithEmailAndPassword(
+      email: email.trim(),
+      password: password,
+    );
+  }
+
+  Future<void> resetPassword(String email) =>
+      _auth.sendPasswordResetEmail(email: email.trim());
+  Future<void> sendVerification() async {
+    await _auth.currentUser?.sendEmailVerification();
+  }
+
+  Future<void> reloadUser() async {
+    await _auth.currentUser?.reload();
+    await _auth.currentUser?.getIdToken(true);
+  }
 
   static String? validateDisplayName(String value) {
     if (value.trim().isEmpty) {
@@ -25,10 +83,18 @@ class AuthService {
   }
 
   static String errorMessage(Object error) {
+    if (error is FormatException) return error.message;
     if (error is FirebaseAuthException) {
       return switch (error.code) {
+        'email-already-in-use' =>
+          'An account already uses this email. Sign in or reset your password.',
+        'invalid-email' => 'Enter a valid email address.',
+        'weak-password' =>
+          'Use a stronger password with at least 8 characters.',
+        'invalid-credential' || 'wrong-password' || 'user-not-found' =>
+          'Email or password is incorrect. Try again or reset your password.',
+        'too-many-requests' => 'Too many attempts. Wait a while and try again.',
         'credential-already-in-use' ||
-        'email-already-in-use' ||
         'account-exists-with-different-credential' => 'This Google account already has a Jiggo account. Your guest data is unchanged. Use another Google account, or log out to open the existing account.',
         'popup-closed-by-user' ||
         'cancelled-popup-request' => 'Google sign-in was cancelled.',
@@ -97,10 +163,8 @@ class AuthService {
   Future<UserCredential> signInAsGuest() => _auth.signInAnonymously();
 
   Future<UserCredential> signInWithGoogle() async {
-    // If called while a guest is signed in, preserve that guest UID.
-    if (_auth.currentUser?.isAnonymous == true) {
-      return linkGuestWithGoogle();
-    }
+    // Browsing must never attach another visitor's anonymous data to a member.
+    await _leaveGuest();
     if (kIsWeb) {
       return _auth.signInWithPopup(_googleProvider());
     }
@@ -133,14 +197,21 @@ class AuthService {
     await user.reload();
   }
 
-  Future<void> deleteAccount() async {
+  Future<void> deleteAccount({String? password}) async {
     final user = _auth.currentUser;
     if (user == null) {
       throw FirebaseAuthException(code: 'unauthenticated');
     }
     final uid = user.uid;
     if (!user.isAnonymous) {
-      if (kIsWeb) {
+      if (user.providerData.any((p) => p.providerId == 'password')) {
+        if (password == null || user.email == null) {
+          throw FirebaseAuthException(code: 'requires-recent-login');
+        }
+        await user.reauthenticateWithCredential(
+          EmailAuthProvider.credential(email: user.email!, password: password),
+        );
+      } else if (kIsWeb) {
         await user.reauthenticateWithPopup(_googleProvider());
       } else {
         await user.reauthenticateWithCredential(await _googleCredential());
@@ -159,6 +230,7 @@ class AuthService {
           options: HttpsCallableOptions(timeout: const Duration(seconds: 560)),
         );
     await deviceLocalFiles.clear(uid);
+    await guidedDrafts.clearOwner(uid);
     if (_auth.currentUser?.uid != uid) {
       throw FirebaseAuthException(code: 'user-mismatch');
     }

@@ -1,3 +1,5 @@
+import 'auth_service.dart';
+
 import 'dart:typed_data';
 
 import 'package:firebase_auth/firebase_auth.dart';
@@ -21,13 +23,16 @@ class AccountLocalFileSaver implements LocalFileSaver {
   final String? expectedOwner;
   AccountLocalFileSaver({this.store, this.currentOwner, this.expectedOwner});
   factory AccountLocalFileSaver.capture() {
-    final owner = FirebaseAuth.instance.currentUser?.uid;
+    final user = FirebaseAuth.instance.currentUser;
+    final owner = AuthService.isMember(user) ? user!.uid : null;
     if (owner == null) throw StateError('local-sign-in');
     return AccountLocalFileSaver(expectedOwner: owner);
   }
   String? _owner() => currentOwner != null
       ? currentOwner!()
-      : FirebaseAuth.instance.currentUser?.uid;
+      : AuthService.isMember(FirebaseAuth.instance.currentUser)
+      ? FirebaseAuth.instance.currentUser!.uid
+      : null;
   @override
   Future<void> save(
     String filename,

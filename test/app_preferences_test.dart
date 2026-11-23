@@ -114,7 +114,7 @@ void main() {
     await tester.tap(find.text('এগিয়ে যাও / Continue'));
     await tester.pumpAndSettle();
     expect(find.byType(LanguageSelectionScreen), findsNothing);
-    expect(find.text('গেস্ট হিসেবে শুরু করো'), findsOneWidget);
+    expect(find.text('অতিথি হিসেবে দেখো'), findsOneWidget);
     expect(settings.locale, const Locale('bn'));
     expect(tester.takeException(), isNull);
   });
@@ -141,7 +141,7 @@ void main() {
     store.failWrites = false;
     await tester.tap(find.text('এগিয়ে যাও / Continue'));
     await tester.pumpAndSettle();
-    expect(find.text('Continue as Guest'), findsOneWidget);
+    expect(find.text('Explore as Guest'), findsOneWidget);
   });
 
   testWidgets('Changing language keeps the preferences route open', (
@@ -257,7 +257,7 @@ void main() {
             find.byKey(const ValueKey(HomeTool.documentMaker)),
           );
           final fourth = tester.getRect(
-            find.byKey(const ValueKey(HomeTool.pdfScanner)),
+            find.byKey(const ValueKey(HomeTool.translator)),
           );
           expect(first.top, second.top);
           expect(second.left, greaterThan(first.left));
@@ -364,7 +364,7 @@ void main() {
           );
           await tester.pumpAndSettle();
           await tester.scrollUntilVisible(
-            find.byKey(const ValueKey(HomeTool.pdfScanner)),
+            find.byKey(const ValueKey(HomeTool.translator)),
             200,
             scrollable: find.byType(Scrollable).first,
           );

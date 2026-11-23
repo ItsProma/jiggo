@@ -1,3 +1,4 @@
+import 'guided_document_screen.dart';
 import '../services/app_theme.dart';
 import '../services/app_strings.dart';
 import 'ai_document_screen.dart';
@@ -11,7 +12,9 @@ class CreateScreen extends StatelessWidget {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => AiDocumentScreen(documentType: title),
+        builder: (context) => title == 'Custom AI Document'
+            ? const AiDocumentScreen()
+            : GuidedDocumentScreen(documentType: title),
       ),
     );
   }
@@ -63,55 +66,15 @@ class CreateScreen extends StatelessWidget {
         padding: const EdgeInsets.all(20),
         children: [
           Text(
-            context.tr('Create with AI'),
+            context.tr('Create a document'),
             style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 8),
           Text(
-            context.tr(
-              'Choose a document type and let Jiggo help you write it.',
-            ),
+            context.tr('Choose a type and answer a few simple questions.'),
             style: TextStyle(color: context.mutedColor),
           ),
           const SizedBox(height: 24),
-
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: context.adaptiveTint(const Color(0xFFE6E9FF)),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Icon(Icons.auto_awesome, size: 32, color: context.accentColor),
-                const SizedBox(height: 12),
-                Text(
-                  context.tr('Custom AI Document'),
-                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  context.tr(
-                    'Describe what you need and Jiggo will help you create it.',
-                  ),
-                ),
-                const SizedBox(height: 16),
-                FilledButton.icon(
-                  onPressed: () => _comingSoon(context, 'Custom AI Document'),
-                  icon: const Icon(Icons.add),
-                  label: Text(context.tr('Create Document')),
-                ),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 28),
-          Text(
-            context.tr('Popular Documents'),
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 14),
 
           _documentTile(
             context,
@@ -154,6 +117,16 @@ class CreateScreen extends StatelessWidget {
             subtitle: 'Create an academic document',
             icon: Icons.menu_book_outlined,
             color: context.adaptiveTint(const Color(0xFFFFE4E6)),
+          ),
+          const SizedBox(height: 8),
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.auto_awesome_outlined),
+              title: Text(context.tr('Custom AI Document')),
+              subtitle: Text(context.tr('Write your own instructions')),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => _comingSoon(context, 'Custom AI Document'),
+            ),
           ),
         ],
       ),

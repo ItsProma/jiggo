@@ -1,3 +1,4 @@
+import '../widgets/local_files_panel.dart';
 import '../services/app_theme.dart';
 import '../services/app_strings.dart';
 
@@ -373,6 +374,60 @@ class _AllLibraryItemsState extends State<AllLibraryItems> {
     );
   }
 
+  Widget _tile(LibraryEntry item) {
+    final pending = _pending.contains(item.key);
+    return Card(
+      color: context.cardColor,
+      elevation: 0,
+      child: ListTile(
+        contentPadding: const EdgeInsets.all(14),
+        leading: CircleAvatar(
+          backgroundColor: context.adaptiveTint(const Color(0xFFE6E9FF)),
+          child: Icon(
+            item.isDocument
+                ? Icons.description_outlined
+                : Icons.document_scanner_outlined,
+            color: context.accentColor,
+          ),
+        ),
+        title: Text(
+          item.title,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(fontWeight: FontWeight.w600),
+        ),
+        subtitle: Text(
+          '${context.tr(item.type)} · ${context.tr(item.language)}',
+        ),
+        trailing: pending
+            ? const SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    tooltip: context.tr('Rename item'),
+                    icon: const Icon(Icons.drive_file_rename_outline),
+                    onPressed: () => _rename(item),
+                  ),
+                  IconButton(
+                    tooltip: context.tr('Delete item'),
+                    icon: const Icon(
+                      Icons.delete_outline,
+                      color: Colors.redAccent,
+                    ),
+                    onPressed: () => _delete(item),
+                  ),
+                ],
+              ),
+        onTap: pending ? null : () => _open(item),
+      ),
+    );
+  }
+
   Widget _render({
     AsyncSnapshot<QuerySnapshot<Map<String, dynamic>>>? documents,
     AsyncSnapshot<QuerySnapshot<Map<String, dynamic>>>? scans,
@@ -397,6 +452,41 @@ class _AllLibraryItemsState extends State<AllLibraryItems> {
       query: widget.searchQuery,
       sort: widget.sort,
     );
+    if (widget.filter == 0) {
+      return ListView(
+        key: const ValueKey('all-library-list'),
+        children: [
+          LocalFilesPanel(
+            key: ValueKey('all-local-${widget.userId}'),
+            userId: widget.userId,
+            search: widget.searchQuery,
+            sort: widget.sort,
+            embedded: true,
+            showEmpty: visible.isEmpty && !loading && !hasError,
+            currentOwner: () => FirebaseAuth.instance.currentUser?.uid,
+          ),
+          if (hasError)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Column(
+                children: [
+                  Text(
+                    context.tr(
+                      'Some items could not be loaded. Check connection and account access.',
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () => setState(_createStreams),
+                    child: Text(context.tr('Retry')),
+                  ),
+                ],
+              ),
+            ),
+          if (loading) const LinearProgressIndicator(),
+          ...visible.map(_tile),
+        ],
+      );
+    }
     if (loading && entries.isEmpty && !hasError) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -463,64 +553,7 @@ class _AllLibraryItemsState extends State<AllLibraryItems> {
                   itemCount: visible.length,
                   separatorBuilder: (_, _) => const SizedBox(height: 12),
                   itemBuilder: (context, index) {
-                    final item = visible[index];
-                    final pending = _pending.contains(item.key);
-                    return Card(
-                      color: context.cardColor,
-                      elevation: 0,
-                      child: ListTile(
-                        contentPadding: const EdgeInsets.all(14),
-                        leading: CircleAvatar(
-                          backgroundColor: context.adaptiveTint(
-                            const Color(0xFFE6E9FF),
-                          ),
-                          child: Icon(
-                            item.isDocument
-                                ? Icons.description_outlined
-                                : Icons.document_scanner_outlined,
-                            color: context.accentColor,
-                          ),
-                        ),
-                        title: Text(
-                          item.title,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontWeight: FontWeight.w600),
-                        ),
-                        subtitle: Text(
-                          '${context.tr(item.type)} · ${context.tr(item.language)}',
-                        ),
-                        trailing: pending
-                            ? const SizedBox(
-                                width: 24,
-                                height: 24,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  IconButton(
-                                    tooltip: context.tr('Rename item'),
-                                    icon: const Icon(
-                                      Icons.drive_file_rename_outline,
-                                    ),
-                                    onPressed: () => _rename(item),
-                                  ),
-                                  IconButton(
-                                    tooltip: context.tr('Delete item'),
-                                    icon: const Icon(
-                                      Icons.delete_outline,
-                                      color: Colors.redAccent,
-                                    ),
-                                    onPressed: () => _delete(item),
-                                  ),
-                                ],
-                              ),
-                        onTap: pending ? null : () => _open(item),
-                      ),
-                    );
+                    return _tile(visible[index]);
                   },
                 ),
         ),

@@ -16,7 +16,7 @@ let env;
 let adminDb;
 const documentPath = 'users/alice/documents/doc-1';
 const scanPath = 'users/alice/scanHistory/scan-1';
-const userDb = (uid = 'alice') => env.authenticatedContext(uid).firestore();
+const userDb = (uid = 'alice') => env.authenticatedContext(uid, {firebase: {sign_in_provider: 'google.com'}}).firestore();
 const seed = (key, data) => env.withSecurityRulesDisabled(async (context) => {
   await setDoc(doc(context.firestore(), key), data);
 });
@@ -94,9 +94,10 @@ test('Owner lists its documents and scans', async () => {
   await assertSucceeds(getDocs(collection(userDb(), 'users/alice/documents')));
   await assertSucceeds(getDocs(collection(userDb(), 'users/alice/scanHistory')));
 });
-test('Guest owner has the same owner-scoped access', async () => {
+test('Guest cannot access even an old anonymous-owned document', async () => {
   const guest = env.authenticatedContext('alice', { firebase: { sign_in_provider: 'anonymous' } }).firestore();
-  await assertSucceeds(getDoc(doc(guest, documentPath)));
+  await assertFails(getDoc(doc(guest, documentPath)));
+  await assertFails(deleteDoc(doc(guest, scanPath)));
 });
 test('Another account cannot read or list owner data', async () => {
   for (const target of [documentPath, scanPath]) await assertFails(getDoc(doc(userDb('bob'), target)));
@@ -307,9 +308,17 @@ test('Real reservation transaction rejects unconfirmed and under-13 accounts wit
 
 test('Concurrent age declarations cannot overwrite a committed age band', async () => {
   const server = serverContext();
-  const makeRequest = (ageBand) => ({ auth: { uid: 'age-race' }, data: {
+  const makeRequest = (ageBand) => ({ auth: { uid: 'age-race', token: {firebase: {sign_in_provider: 'google.com'}} }, data: {
     expectedUid: 'age-race', ageBand, guardianPermission: false, privacyAccepted: true, version: 1 } });
   const results = await Promise.allSettled(['under-13', '18-plus'].map((band) => server.exports.setAiEligibility(makeRequest(band))));
   assert.equal(results.filter((r) => r.status === 'fulfilled').length, 1);
   assert.equal(results.filter((r) => r.status === 'rejected').length, 1);
+});
+
+test('Email accounts require verification and cannot read another owner', async () => {
+  const unverified = env.authenticatedContext('alice', {firebase: {sign_in_provider: 'password'}, email_verified: false}).firestore();
+  const verified = env.authenticatedContext('alice', {firebase: {sign_in_provider: 'password'}, email_verified: true}).firestore();
+  await assertFails(getDoc(doc(unverified, documentPath)));
+  await assertSucceeds(getDoc(doc(verified, documentPath)));
+  await assertFails(getDoc(doc(verified, 'users/bob/documents/other')));
 });

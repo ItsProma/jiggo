@@ -30,6 +30,9 @@ class _DocumentVoiceDialogState extends State<DocumentVoiceDialog>
   bool _acceptSpeech = false;
   String? _error;
   int _run = 0;
+  String _failure(String fallback) => widget.speech is SpeechFailureInfo
+      ? ((widget.speech as SpeechFailureInfo).lastFailure ?? fallback)
+      : fallback;
 
   @override
   void initState() {
@@ -86,7 +89,9 @@ class _DocumentVoiceDialogState extends State<DocumentVoiceDialog>
       if (!await widget.speech.initialize()) {
         if (!mounted || run != _run) return;
         setState(
-          () => _error = 'Voice is unavailable or microphone permission was denied. You can still type your details.',
+          () => _error = _failure(
+            'Voice is unavailable or microphone permission was denied. You can still type your details.',
+          ),
         );
         return;
       }
@@ -137,7 +142,9 @@ class _DocumentVoiceDialogState extends State<DocumentVoiceDialog>
           if (!mounted || run != _run) return;
           setState(() {
             _listening = false;
-            _error = 'Speech could not be recognised. Check microphone permission and your connection, then try again or type.';
+            _error = _failure(
+              'Speech could not be recognised. Check microphone permission and your connection, then try again or type.',
+            );
           });
         },
       );
@@ -148,7 +155,9 @@ class _DocumentVoiceDialogState extends State<DocumentVoiceDialog>
         if (!mounted || run != _run) return;
         setState(() {
           _listening = false;
-          _error = 'Voice is unavailable or microphone permission was denied. You can still type your details.';
+          _error = _failure(
+            'Voice is unavailable or microphone permission was denied. You can still type your details.',
+          );
         });
       }
     } finally {
@@ -239,6 +248,8 @@ class _DocumentVoiceDialogState extends State<DocumentVoiceDialog>
                         ? 'Stopping...'
                         : _listening
                         ? 'Stop listening'
+                        : _error != null
+                        ? 'Retry'
                         : 'Start listening',
                   ),
                 ),

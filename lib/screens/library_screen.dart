@@ -182,31 +182,12 @@ class _LibraryScreenState extends State<LibraryScreen> {
                           FirebaseAuth.instance.currentUser?.uid,
                     );
                   }
-                  final cloud = AllLibraryItems(
+                  return AllLibraryItems(
                     key: ValueKey(user.uid),
                     userId: user.uid,
                     searchQuery: _searchQuery,
                     filter: _selectedFilter,
                     sort: _sort,
-                  );
-                  if (_selectedFilter != 0) return cloud;
-                  return Column(
-                    children: [
-                      Card(
-                        child: ListTile(
-                          leading: const Icon(Icons.folder_copy_outlined),
-                          title: Text(context.tr('Local files on this device')),
-                          subtitle: Text(
-                            context.tr(
-                              'TXT, DOCX, images and PDFs saved from tools',
-                            ),
-                          ),
-                          trailing: const Icon(Icons.chevron_right),
-                          onTap: () => setState(() => _selectedFilter = 4),
-                        ),
-                      ),
-                      Expanded(child: cloud),
-                    ],
                   );
                 },
               ),

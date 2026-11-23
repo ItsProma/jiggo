@@ -4,7 +4,7 @@ import '../services/app_strings.dart';
 import '../services/app_theme.dart';
 import 'responsive_tools_grid.dart';
 
-enum HomeTool { fileEditor, scanSolve, documentMaker, pdfScanner }
+enum HomeTool { fileEditor, scanSolve, documentMaker, translator }
 
 class HomeTools extends StatelessWidget {
   final ValueChanged<HomeTool> onSelected;
@@ -32,10 +32,10 @@ class HomeTools extends StatelessWidget {
         Icons.description_outlined,
       ),
       (
-        HomeTool.pdfScanner,
-        'PDF Scanner',
-        'Scan and export',
-        Icons.picture_as_pdf_outlined,
+        HomeTool.translator,
+        'Translator',
+        'Translate between languages',
+        Icons.translate,
       ),
     ];
     return ResponsiveToolsGrid(

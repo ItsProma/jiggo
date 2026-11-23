@@ -23,7 +23,8 @@ import '../services/ai_limit_messages.dart';
 import 'recent_scans.dart';
 
 class ScanScreen extends StatefulWidget {
-  const ScanScreen({super.key});
+  final ImageSource? initialSource;
+  const ScanScreen({super.key, this.initialSource});
 
   @override
   State<ScanScreen> createState() => _ScanScreenState();
@@ -41,6 +42,16 @@ class _ScanScreenState extends State<ScanScreen> {
   String? _aiAnswer;
   String? _aiError;
   int? _remainingScans;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.initialSource != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _pickImage(widget.initialSource!);
+      });
+    }
+  }
 
   Future<void> _pickImage(ImageSource source) async {
     if (_isPicking || _isSolving) return;

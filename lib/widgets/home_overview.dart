@@ -12,6 +12,7 @@ class HomeOverview extends StatelessWidget {
   final VoidCallback onOpenLibrary;
   final ValueChanged<String>? onSubmit;
   final Widget? recentFiles;
+  final VoidCallback? onAttachment, onCamera, onVoice;
   const HomeOverview({
     super.key,
     required this.promptController,
@@ -20,6 +21,9 @@ class HomeOverview extends StatelessWidget {
     required this.onOpenLibrary,
     this.onSubmit,
     this.recentFiles,
+    this.onAttachment,
+    this.onCamera,
+    this.onVoice,
   });
 
   @override
@@ -49,6 +53,7 @@ class HomeOverview extends StatelessWidget {
             children: [
               TextField(
                 controller: promptController,
+                maxLength: 2000,
                 maxLines: 3,
                 minLines: 2,
                 decoration: InputDecoration(
@@ -58,16 +63,17 @@ class HomeOverview extends StatelessWidget {
               ),
               Row(
                 children: [
+                  
                   IconButton(
-                    onPressed: () => onUnavailable('Attachment'),
-                    icon: const Icon(Icons.add),
-                  ),
-                  IconButton(
-                    onPressed: () => onUnavailable('Camera'),
+                    key: const ValueKey('home-camera'),
+                    tooltip: context.tr('Camera or gallery'),
+                    onPressed: onCamera,
                     icon: const Icon(Icons.camera_alt_outlined),
                   ),
                   IconButton(
-                    onPressed: () => onUnavailable('Voice Input'),
+                    key: const ValueKey('home-voice'),
+                    tooltip: context.tr('Voice Input'),
+                    onPressed: onVoice,
                     icon: const Icon(Icons.mic_none),
                   ),
                   const Spacer(),
@@ -85,12 +91,6 @@ class HomeOverview extends StatelessWidget {
           ),
         ),
 
-        TextButton.icon(
-          key: const ValueKey('home-chat-history'),
-          onPressed: onSubmit == null ? null : () => onSubmit!(''),
-          icon: const Icon(Icons.chat_bubble_outline),
-          label: Text(context.tr('AI Chat & history')),
-        ),
         const SizedBox(height: 20),
         Text(
           context.tr('Explore Tools'),

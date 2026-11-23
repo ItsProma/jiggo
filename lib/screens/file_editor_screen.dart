@@ -1,3 +1,5 @@
+import '../widgets/guarded_page_exit.dart';
+
 import 'dart:convert';
 
 import '../services/local_file_saver.dart';
@@ -26,7 +28,8 @@ class FileEditorScreen extends StatefulWidget {
   State<FileEditorScreen> createState() => _FileEditorScreenState();
 }
 
-class _FileEditorScreenState extends State<FileEditorScreen> {
+class _FileEditorScreenState extends State<FileEditorScreen>
+    with GuardedPageExit<FileEditorScreen> {
   final _text = TextEditingController();
   final _title = TextEditingController(text: 'My text');
   final _undo = UndoHistoryController();
@@ -223,131 +226,142 @@ class _FileEditorScreenState extends State<FileEditorScreen> {
 
   Future<void> _close() async {
     if (_busy || !await _confirm() || !mounted) return;
-    Navigator.pop(context);
+    await finishPageExit();
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(
-      leading: BackButton(onPressed: _close),
-      title: Text(context.tr('Text Editor')),
-    ),
-    body: SafeArea(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(context.tr('Write, paste or open a TXT file.')),
-            const SizedBox(height: 16),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                FilledButton.icon(
-                  key: const ValueKey('open-txt'),
-                  onPressed: _busy ? null : _open,
-                  icon: const Icon(Icons.folder_open),
-                  label: Text(context.tr('Open TXT')),
-                ),
-                OutlinedButton.icon(
-                  onPressed: _busy ? null : _paste,
-                  icon: const Icon(Icons.content_paste),
-                  label: Text(context.tr('Paste text')),
-                ),
-                ValueListenableBuilder<UndoHistoryValue>(
-                  valueListenable: _undo,
-                  builder: (context, value, _) => Wrap(
-                    children: [
-                      IconButton(
-                        tooltip: context.tr('Undo'),
-                        onPressed: !_busy && value.canUndo ? _undo.undo : null,
-                        icon: const Icon(Icons.undo),
-                      ),
-                      IconButton(
-                        tooltip: context.tr('Redo'),
-                        onPressed: !_busy && value.canRedo ? _undo.redo : null,
-                        icon: const Icon(Icons.redo),
-                      ),
-                    ],
+  Widget build(BuildContext context) => guardPageExit(
+    Scaffold(
+      appBar: AppBar(
+        leading: BackButton(onPressed: () => guardedBack(_close)),
+        title: Text(context.tr('Text Editor')),
+      ),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(context.tr('Write, paste or open a TXT file.')),
+              const SizedBox(height: 16),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  FilledButton.icon(
+                    key: const ValueKey('open-txt'),
+                    onPressed: _busy ? null : _open,
+                    icon: const Icon(Icons.folder_open),
+                    label: Text(context.tr('Open TXT')),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              key: const ValueKey('text-file-title'),
-              controller: _title,
-              enabled: !_busy,
-              maxLength: 140,
-              maxLengthEnforcement: MaxLengthEnforcement.none,
-              buildCounter: (
-                context, {
-                required currentLength,
-                required isFocused,
-                maxLength,
-              }) => Text('${_title.text.length}/140'),
-              decoration: InputDecoration(labelText: context.tr('File title')),
-              onChanged: (_) => setState(() => _notice = null),
-            ),
-            TextField(
-              key: ValueKey('text-file-body-$_generation'),
-              controller: _text,
-              undoController: _undo,
-              focusNode: _focus,
-              enabled: !_busy,
-              minLines: 12,
-              maxLines: 24,
-              maxLength: TextDocument.maxCharacters,
-              maxLengthEnforcement: MaxLengthEnforcement.none,
-              buildCounter: (
-                context, {
-                required currentLength,
-                required isFocused,
-                maxLength,
-              }) => Text('${_text.text.length}/20000'),
-              decoration: InputDecoration(
-                labelText: context.tr('Your text'),
-                alignLabelWithHint: true,
-                border: const OutlineInputBorder(),
+                  OutlinedButton.icon(
+                    onPressed: _busy ? null : _paste,
+                    icon: const Icon(Icons.content_paste),
+                    label: Text(context.tr('Paste text')),
+                  ),
+                  ValueListenableBuilder<UndoHistoryValue>(
+                    valueListenable: _undo,
+                    builder: (context, value, _) => Wrap(
+                      children: [
+                        IconButton(
+                          tooltip: context.tr('Undo'),
+                          onPressed: !_busy && value.canUndo
+                              ? _undo.undo
+                              : null,
+                          icon: const Icon(Icons.undo),
+                        ),
+                        IconButton(
+                          tooltip: context.tr('Redo'),
+                          onPressed: !_busy && value.canRedo
+                              ? _undo.redo
+                              : null,
+                          icon: const Icon(Icons.redo),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
-              onChanged: (_) => setState(() => _notice = null),
-            ),
-            if (_busy) const LinearProgressIndicator(),
-            if (_notice != null)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                child: Text(context.tr(_notice!)),
+              const SizedBox(height: 16),
+              TextField(
+                key: const ValueKey('text-file-title'),
+                controller: _title,
+                enabled: !_busy,
+                maxLength: 140,
+                maxLengthEnforcement: MaxLengthEnforcement.none,
+                buildCounter: (
+                  context, {
+                  required currentLength,
+                  required isFocused,
+                  maxLength,
+                }) => Text('${_title.text.length}/140'),
+                decoration: InputDecoration(
+                  labelText: context.tr('File title'),
+                ),
+                onChanged: (_) => setState(() => _notice = null),
               ),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                OutlinedButton.icon(
-                  key: const ValueKey('local-library-save'),
-                  onPressed: _busy ? null : () => _export(false, library: true),
-                  icon: const Icon(Icons.library_add_outlined),
-                  label: Text(context.tr('Save to Library')),
+              TextField(
+                key: ValueKey('text-file-body-$_generation'),
+                controller: _text,
+                undoController: _undo,
+                focusNode: _focus,
+                enabled: !_busy,
+                minLines: 12,
+                maxLines: 24,
+                maxLength: TextDocument.maxCharacters,
+                maxLengthEnforcement: MaxLengthEnforcement.none,
+                buildCounter: (
+                  context, {
+                  required currentLength,
+                  required isFocused,
+                  maxLength,
+                }) => Text('${_text.text.length}/20000'),
+                decoration: InputDecoration(
+                  labelText: context.tr('Your text'),
+                  alignLabelWithHint: true,
+                  border: const OutlineInputBorder(),
                 ),
-                FilledButton(
-                  onPressed: _busy ? null : () => _export(false),
-                  child: Text(context.tr('Save TXT copy')),
+                onChanged: (_) => setState(() => _notice = null),
+              ),
+              if (_busy) const LinearProgressIndicator(),
+              if (_notice != null)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  child: Text(context.tr(_notice!)),
                 ),
-                OutlinedButton(
-                  onPressed: _busy ? null : _copy,
-                  child: Text(context.tr('Copy text')),
-                ),
-                OutlinedButton(
-                  onPressed: _busy ? null : () => _export(true),
-                  child: Text(context.tr('Share text')),
-                ),
-              ],
-            ),
-            const SizedBox(height: 24),
-          ],
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  OutlinedButton.icon(
+                    key: const ValueKey('local-library-save'),
+                    onPressed: _busy
+                        ? null
+                        : () => _export(false, library: true),
+                    icon: const Icon(Icons.library_add_outlined),
+                    label: Text(context.tr('Save to Library')),
+                  ),
+                  FilledButton(
+                    onPressed: _busy ? null : () => _export(false),
+                    child: Text(context.tr('Save TXT copy')),
+                  ),
+                  OutlinedButton(
+                    onPressed: _busy ? null : _copy,
+                    child: Text(context.tr('Copy text')),
+                  ),
+                  OutlinedButton(
+                    onPressed: _busy ? null : () => _export(true),
+                    child: Text(context.tr('Share text')),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+            ],
+          ),
         ),
       ),
     ),
+    _close,
   );
 }

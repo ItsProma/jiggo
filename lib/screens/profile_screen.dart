@@ -157,7 +157,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ) +
               (user.isAnonymous
                   ? ''
-                  : ' ${context.tr('Google will ask you to confirm your identity.')}'),
+                  : ' ${context.tr('Confirm your identity before deleting your account.')}'),
         ),
         actions: [
           TextButton(
@@ -177,7 +177,40 @@ class _ProfileScreenState extends State<ProfileScreen> {
         _service.currentUser?.uid != user.uid) {
       return;
     }
-    await _run('Deleting account…', _service.deleteAccount);
+    String? password;
+    if (user.providerData.any((p) => p.providerId == 'password')) {
+      final controller = TextEditingController();
+      password = await showDialog<String>(
+        context: context,
+        builder: (c) => AlertDialog(
+          title: Text(c.tr('Confirm your password')),
+          content: TextField(
+            controller: controller,
+            obscureText: true,
+            autocorrect: false,
+            decoration: InputDecoration(labelText: c.tr('Password')),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(c),
+              child: Text(c.tr('Cancel')),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(c, controller.text),
+              child: Text(c.tr('Continue')),
+            ),
+          ],
+        ),
+      );
+      // Wait until the dialog route has removed its text field.
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+      controller.dispose();
+      if (!mounted || password == null || password.isEmpty) return;
+    }
+    await _run(
+      'Deleting account…',
+      () => _service.deleteAccount(password: password),
+    );
   }
 
   Widget _settingTile({
