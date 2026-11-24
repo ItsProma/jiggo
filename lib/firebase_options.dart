@@ -54,7 +54,10 @@ class DefaultFirebaseOptions {
     appId: '1:651664929928:web:fa1c6c5511b1e0c6361b3d',
     messagingSenderId: '651664929928',
     projectId: 'jiggo-bee33',
-    authDomain: 'jiggo-bee33.firebaseapp.com',
+    authDomain: String.fromEnvironment(
+      'FIREBASE_AUTH_DOMAIN',
+      defaultValue: 'jiggo-bee33.firebaseapp.com',
+    ),
     storageBucket: 'jiggo-bee33.firebasestorage.app',
     measurementId: 'G-26YMQ2YCC1',
   );
