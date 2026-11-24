@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
+import '../widgets/web_login_welcome.dart';
 import '../services/app_theme.dart';
 import '../services/app_strings.dart';
 
@@ -45,6 +47,24 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (kIsWeb) {
+      return Scaffold(
+        backgroundColor: context.pageColor,
+        body: SafeArea(
+          child: WebLoginWelcome(
+            showGuest: widget.showGuest,
+            busy: _isLoading,
+            error: _error,
+            onGoogle: _googleLogin,
+            onGuest: _guestLogin,
+            onEmail: () => Navigator.push<void>(
+              context, MaterialPageRoute(builder: (_) => const EmailAuthScreen())),
+            onPrivacy: () => Navigator.push<void>(
+              context, MaterialPageRoute(builder: (_) => const PrivacyScreen())),
+          ),
+        ),
+      );
+    }
     return Scaffold(
       backgroundColor: context.pageColor,
       body: SafeArea(
